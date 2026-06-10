@@ -1,0 +1,17 @@
+<Document>
+  <Data>
+    <Header>
+      <Sender>ZE DONE</Sender>
+      <Receiver>ESS_UTUMISHI</Receiver>
+      <FSPCode>1001</FSPCode>
+      <MsgId>MSGID131</MsgId>
+      <MessageType>PRODUCT_DETAIL</MessageType>
+    </Header>
+    <MessageDetails>
+      <ProductCode>PROD002</ProductCode>
+      <ProductName>Loan Product</ProductName>
+      <InterestRate>12.5</InterestRate>
+    </MessageDetails>
+  </Data>
+  <Signature>Signature</Signature>
+</Document>

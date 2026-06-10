@@ -1,0 +1,192 @@
+{
+  "dashboard": {
+    "id": null,
+    "uid": "ess-overview-2025",
+    "title": "ESS System Overview",
+    "description": "Comprehensive overview of ESS loan processing system",
+    "tags": ["ess", "loans", "mifos", "utumishi", "overview"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "System Health Status",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "count(count by (job) ({job=\"ess-app\"}))",
+            "refId": "A",
+            "datasource": {
+              "type": "loki",
+              "uid": "ef69p8jegs4xsf"
+            }
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "green", "value": 1}
+              ]
+            }
+          }
+        },
+        "gridPos": {"h": 8, "w": 6, "x": 0, "y": 0}
+      },
+      {
+        "id": 2,
+        "title": "Recent Log Activity",
+        "type": "logs",
+        "targets": [
+          {
+            "expr": "{job=\"ess-app\"} |= \"\"",
+            "refId": "A",
+            "datasource": {
+              "type": "loki",
+              "uid": "ef69p8jegs4xsf"
+            }
+          }
+        ],
+        "options": {
+          "showTime": true,
+          "showLabels": false,
+          "showCommonLabels": false,
+          "wrapLogMessage": false,
+          "prettifyLogMessage": false,
+          "enableLogDetails": true,
+          "dedupStrategy": "none",
+          "sortOrder": "Descending"
+        },
+        "gridPos": {"h": 16, "w": 18, "x": 6, "y": 0}
+      },
+      {
+        "id": 3,
+        "title": "Error Rate",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "sum(rate({job=\"ess-error\"} [5m]))",
+            "refId": "A",
+            "datasource": {
+              "type": "loki",
+              "uid": "ef69p8jegs4xsf"
+            }
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": 0},
+                {"color": "yellow", "value": 0.1},
+                {"color": "red", "value": 1}
+              ]
+            },
+            "unit": "reqps"
+          }
+        },
+        "gridPos": {"h": 8, "w": 6, "x": 0, "y": 8}
+      },
+      {
+        "id": 4,
+        "title": "Request Volume (5min)",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "sum(rate({job=\"ess-app\"} |~ \"(POST|GET|PUT|DELETE)\" [5m])) by ()",
+            "refId": "A",
+            "datasource": {
+              "type": "loki",
+              "uid": "ef69p8jegs4xsf"
+            }
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            },
+            "custom": {
+              "drawStyle": "line",
+              "lineInterpolation": "linear",
+              "barAlignment": 0,
+              "lineWidth": 1,
+              "fillOpacity": 0,
+              "gradientMode": "none",
+              "spanNulls": false,
+              "insertNulls": false,
+              "showPoints": "auto",
+              "pointSize": 5
+            },
+            "unit": "reqps"
+          }
+        },
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 16}
+      },
+      {
+        "id": 5,
+        "title": "Top Error Messages",
+        "type": "table",
+        "targets": [
+          {
+            "expr": "topk(10, sum by (error) (count_over_time({job=\"ess-error\"} [1h])))",
+            "refId": "A",
+            "datasource": {
+              "type": "loki",
+              "uid": "ef69p8jegs4xsf"
+            }
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "align": "auto",
+              "displayMode": "auto"
+            }
+          }
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 24}
+      },
+      {
+        "id": 6,
+        "title": "Recent Errors",
+        "type": "logs",
+        "targets": [
+          {
+            "expr": "{job=\"ess-error\"} |= \"\"",
+            "refId": "A",
+            "datasource": {
+              "type": "loki",
+              "uid": "ef69p8jegs4xsf"
+            }
+          }
+        ],
+        "options": {
+          "showTime": true,
+          "showLabels": false,
+          "showCommonLabels": false,
+          "wrapLogMessage": true,
+          "prettifyLogMessage": false,
+          "enableLogDetails": true,
+          "dedupStrategy": "none",
+          "sortOrder": "Descending"
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 24}
+      }
+    ],
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "refresh": "30s",
+    "schemaVersion": 37,
+    "version": 1,
+    "links": []
+  }
+}

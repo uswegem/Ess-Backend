@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin API Test - MiraCore ESS</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .success { border-color: #4CAF50; background-color: #f9fff9; }
+        .error { border-color: #f44336; background-color: #fff9f9; }
+        .warning { border-color: #ff9800; background-color: #fff9f0; }
+        button {
+            background-color: #2196F3;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background-color: #1976D2; }
+        .output {
+            background-color: #f0f0f0;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+            white-space: pre-wrap;
+            font-family: monospace;
+        }
+        .status { font-weight: bold; padding: 5px 10px; border-radius: 3px; }
+        .status.online { background-color: #4CAF50; color: white; }
+        .status.offline { background-color: #f44336; color: white; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 Admin API Connectivity Test</h1>
+        <p>Testing connection between frontend and ESS backend API</p>
+        
+        <div class="test-section">
+            <h3>Backend Status</h3>
+            <div id="backend-status">
+                <span class="status offline">Checking...</span>
+                <div id="backend-output" class="output"></div>
+            </div>
+            <button onclick="testBackendHealth()">Test Backend Health</button>
+        </div>
+
+        <div class="test-section">
+            <h3>API Endpoints Test</h3>
+            <button onclick="testLoanProducts()">Test Loan Products</button>
+            <button onclick="testEmployeeLoans()">Test Employee Loans</button>
+            <button onclick="testUsers()">Test Users API</button>
+            <div id="api-output" class="output"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>Authentication Test</h3>
+            <div>
+                <label>Email: <input type="email" id="email" value="admin@miracore.com" /></label><br><br>
+                <label>Password: <input type="password" id="password" value="admin123" /></label><br><br>
+                <button onclick="testLogin()">Test Login</button>
+                <button onclick="testLogout()">Test Logout</button>
+            </div>
+            <div id="auth-output" class="output"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>CORS & Network Test</h3>
+            <button onclick="testCORS()">Test CORS</button>
+            <button onclick="testNetworkLatency()">Test Network Speed</button>
+            <div id="network-output" class="output"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://135.181.33.13:3002';
+        let authToken = null;
+
+        function log(elementId, message, type = 'info') {
+            const output = document.getElementById(elementId);
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = `[${timestamp}] ${message}\n`;
+            output.textContent += logEntry;
+            output.scrollTop = output.scrollHeight;
+        }
+
+        function clearLog(elementId) {
+            document.getElementById(elementId).textContent = '';
+        }
+
+        async function makeRequest(url, options = {}) {
+            const headers = {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                ...options.headers
+            };
+
+            if (authToken) {
+                headers.Authorization = `Bearer ${authToken}`;
+            }
+
+            try {
+                const response = await fetch(url, {
+                    ...options,
+                    headers,
+                    mode: 'cors'
+                });
+
+                const result = {
+                    status: response.status,
+                    ok: response.ok,
+                    headers: Object.fromEntries(response.headers.entries()),
+                    data: null
+                };
+
+                try {
+                    result.data = await response.json();
+                } catch {
+                    result.data = await response.text();
+                }
+
+                return result;
+            } catch (error) {
+                return {
+                    error: true,
+                    message: error.message,
+                    type: error.name
+                };
+            }
+        }
+
+        async function testBackendHealth() {
+            clearLog('backend-output');
+            log('backend-output', '🔍 Testing ESS Backend Health...');
+            
+            const result = await makeRequest(`${API_BASE}/health`);
+            
+            if (result.error) {
+                log('backend-output', `❌ Backend Error: ${result.message}`, 'error');
+                document.querySelector('#backend-status .status').className = 'status offline';
+                document.querySelector('#backend-status .status').textContent = 'Offline';
+            } else {
+                log('backend-output', `✅ Backend Health: ${result.status} - ${JSON.stringify(result.data)}`, 'success');
+                document.querySelector('#backend-status .status').className = 'status online';
+                document.querySelector('#backend-status .status').textContent = 'Online';
+            }
+        }
+
+        async function testLoanProducts() {
+            clearLog('api-output');
+            log('api-output', '🔍 Testing Loan Products API...');
+            
+            const result = await makeRequest(`${API_BASE}/api/v1/loan/list-products`);
+            
+            if (result.error) {
+                log('api-output', `❌ Network Error: ${result.message}`, 'error');
+            } else if (result.status === 404) {
+                log('api-output', `⚠️ Endpoint Not Found (404) - Admin routes not deployed yet`, 'warning');
+            } else if (result.status === 401) {
+                log('api-output', `🔐 Authentication Required (401) - Endpoint exists but needs login`, 'warning');
+            } else if (result.ok) {
+                log('api-output', `✅ Loan Products: ${JSON.stringify(result.data, null, 2)}`, 'success');
+            } else {
+                log('api-output', `❌ API Error: ${result.status} - ${JSON.stringify(result.data)}`, 'error');
+            }
+        }
+
+        async function testEmployeeLoans() {
+            log('api-output', '\n🔍 Testing Employee Loans API...');
+            
+            const result = await makeRequest(`${API_BASE}/api/v1/loan/list-employee-loan`);
+            
+            if (result.error) {
+                log('api-output', `❌ Network Error: ${result.message}`, 'error');
+            } else if (result.status === 404) {
+                log('api-output', `⚠️ Endpoint Not Found (404) - Admin routes not deployed yet`, 'warning');
+            } else if (result.status === 401) {
+                log('api-output', `🔐 Authentication Required (401) - Endpoint exists but needs login`, 'warning');
+            } else if (result.ok) {
+                log('api-output', `✅ Employee Loans: Found ${result.data?.data?.loans?.length || 0} loans`, 'success');
+            } else {
+                log('api-output', `❌ API Error: ${result.status} - ${JSON.stringify(result.data)}`, 'error');
+            }
+        }
+
+        async function testUsers() {
+            log('api-output', '\n🔍 Testing Users API...');
+            
+            const result = await makeRequest(`${API_BASE}/api/v1/admin/get_all_users`);
+            
+            if (result.error) {
+                log('api-output', `❌ Network Error: ${result.message}`, 'error');
+            } else if (result.status === 404) {
+                log('api-output', `⚠️ Endpoint Not Found (404) - Admin routes not deployed yet`, 'warning');
+            } else if (result.status === 401) {
+                log('api-output', `🔐 Authentication Required (401) - Endpoint exists but needs login`, 'warning');
+            } else if (result.ok) {
+                log('api-output', `✅ Users API: ${JSON.stringify(result.data, null, 2)}`, 'success');
+            } else {
+                log('api-output', `❌ API Error: ${result.status} - ${JSON.stringify(result.data)}`, 'error');
+            }
+        }
+
+        async function testLogin() {
+            clearLog('auth-output');
+            log('auth-output', '🔍 Testing Login API...');
+            
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            
+            const result = await makeRequest(`${API_BASE}/api/v1/auth/login`, {
+                method: 'POST',
+                body: JSON.stringify({ email, password })
+            });
+            
+            if (result.error) {
+                log('auth-output', `❌ Network Error: ${result.message}`, 'error');
+            } else if (result.status === 404) {
+                log('auth-output', `⚠️ Login Endpoint Not Found (404) - Auth routes not deployed yet`, 'warning');
+            } else if (result.ok && result.data.success) {
+                authToken = result.data.data.token;
+                log('auth-output', `✅ Login Success! Token: ${authToken.substring(0, 20)}...`, 'success');
+            } else {
+                log('auth-output', `❌ Login Failed: ${JSON.stringify(result.data)}`, 'error');
+            }
+        }
+
+        async function testLogout() {
+            if (!authToken) {
+                log('auth-output', '\n⚠️ No active session to logout', 'warning');
+                return;
+            }
+            
+            log('auth-output', '\n🔍 Testing Logout API...');
+            
+            const result = await makeRequest(`${API_BASE}/api/v1/auth/logout`, {
+                method: 'POST'
+            });
+            
+            if (result.ok) {
+                authToken = null;
+                log('auth-output', `✅ Logout Success`, 'success');
+            } else {
+                log('auth-output', `❌ Logout Error: ${JSON.stringify(result.data)}`, 'error');
+            }
+        }
+
+        async function testCORS() {
+            clearLog('network-output');
+            log('network-output', '🔍 Testing CORS Configuration...');
+            
+            try {
+                const response = await fetch(`${API_BASE}/health`, {
+                    method: 'OPTIONS',
+                    mode: 'cors'
+                });
+                
+                const corsHeaders = {
+                    'Access-Control-Allow-Origin': response.headers.get('Access-Control-Allow-Origin'),
+                    'Access-Control-Allow-Methods': response.headers.get('Access-Control-Allow-Methods'),
+                    'Access-Control-Allow-Headers': response.headers.get('Access-Control-Allow-Headers')
+                };
+                
+                log('network-output', `✅ CORS Headers: ${JSON.stringify(corsHeaders, null, 2)}`, 'success');
+            } catch (error) {
+                log('network-output', `❌ CORS Error: ${error.message}`, 'error');
+            }
+        }
+
+        async function testNetworkLatency() {
+            log('network-output', '\n🔍 Testing Network Latency...');
+            
+            const start = Date.now();
+            const result = await makeRequest(`${API_BASE}/health`);
+            const latency = Date.now() - start;
+            
+            if (result.error) {
+                log('network-output', `❌ Network Error: ${result.message}`, 'error');
+            } else {
+                log('network-output', `✅ Network Latency: ${latency}ms`, 'success');
+                if (latency > 1000) {
+                    log('network-output', `⚠️ High latency detected - consider optimization`, 'warning');
+                }
+            }
+        }
+
+        // Auto-test on page load
+        window.onload = () => {
+            testBackendHealth();
+        };
+    </script>
+</body>
+</html>

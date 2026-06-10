@@ -1,0 +1,451 @@
+{
+  "info": {
+    "name": "MiraCore ESS API - Incoming Messages",
+    "description": "Postman collection for testing all incoming message types from ESS_UTUMISHI to ZE DONE",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:3002",
+      "type": "string"
+    },
+    {
+      "key": "api_endpoint",
+      "value": "{{base_url}}/api/loan",
+      "type": "string"
+    },
+    {
+      "key": "fsp_code",
+      "value": "FL8090",
+      "type": "string"
+    },
+    {
+      "key": "timestamp",
+      "value": "{{$timestamp}}",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "RESPONSE",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/xml"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<Document>\n    <Data>\n        <Header>\n            <Sender>ESS_UTUMISHI</Sender>\n            <Receiver>ZE DONE</Receiver>\n            <FSPCode>{{fsp_code}}</FSPCode>\n            <MsgId>RESP_{{timestamp}}</MsgId>\n            <MessageType>RESPONSE</MessageType>\n        </Header>\n        <MessageDetails>\n            <ResponseCode>0000</ResponseCode>\n            <Description>Success</Description>\n        </MessageDetails>\n    </Data>\n</Document>"
+        },
+        "url": {
+          "raw": "{{api_endpoint}}",
+          "host": ["{{base_url}}"],
+          "path": ["api", "loan"]
+        }
+      }
+    },
+    {
+      "name": "ACCOUNT_VALIDATION",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/xml"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<Document>\n    <Data>\n        <Header>\n            <Sender>ESS_UTUMISHI</Sender>\n            <Receiver>ZE DONE</Receiver>\n            <FSPCode>{{fsp_code}}</FSPCode>\n            <MsgId>ACC_VAL_{{timestamp}}</MsgId>\n            <MessageType>ACCOUNT_VALIDATION</MessageType>\n        </Header>\n        <MessageDetails>\n            <CheckNumber>CHK{{timestamp}}</CheckNumber>\n            <BankAccountNumber>1234567890</BankAccountNumber>\n            <SwiftCode>TESTSWFT</SwiftCode>\n        </MessageDetails>\n    </Data>\n</Document>"
+        },
+        "url": {
+          "raw": "{{api_endpoint}}",
+          "host": ["{{base_url}}"],
+          "path": ["api", "loan"]
+        }
+      }
+    },
+    {
+      "name": "DEDUCTION_STOP_NOTIFICATION",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/xml"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<Document>\n    <Data>\n        <Header>\n            <Sender>ESS_UTUMISHI</Sender>\n            <Receiver>ZE DONE</Receiver>\n            <FSPCode>{{fsp_code}}</FSPCode>\n            <MsgId>DED_STOP_{{timestamp}}</MsgId>\n            <MessageType>DEDUCTION_STOP_NOTIFICATION</MessageType>\n        </Header>\n        <MessageDetails>\n            <CheckNumber>CHK{{timestamp}}</CheckNumber>\n            <Reason>Employee Resignation</Reason>\n            <EffectiveDate>2025-01-01</EffectiveDate>\n        </MessageDetails>\n    </Data>\n</Document>"
+        },
+        "url": {
+          "raw": "{{api_endpoint}}",
+          "host": ["{{base_url}}"],
+          "path": ["api", "loan"]
+        }
+      }
+    },
+    {
+      "name": "DEFAULTER_DETAILS_TO_FSP",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/xml"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<Document>\n    <Data>\n        <Header>\n            <Sender>ESS_UTUMISHI</Sender>\n            <Receiver>ZE DONE</Receiver>\n            <FSPCode>{{fsp_code}}</FSPCode>\n            <MsgId>DEFAULTER_{{timestamp}}</MsgId>\n            <MessageType>DEFAULTER_DETAILS_TO_FSP</MessageType>\n        </Header>\n        <MessageDetails>\n            <CheckNumber>CHK{{timestamp}}</CheckNumber>\n            <LoanNumber>LOAN{{timestamp}}</LoanNumber>\n            <OutstandingAmount>1000000</OutstandingAmount>\n            <DaysPastDue>30</DaysPastDue>\n        </MessageDetails>\n    </Data>\n</Document>"
+        },
+        "url": {
+          "raw": "{{api_endpoint}}",
+          "host": ["{{base_url}}"],
+          "path": ["api", "loan"]
+        }
+      }
+    },
+    {
+      "name": "FSP_MONTHLY_DEDUCTIONS",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/xml"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<Document>\n    <Data>\n        <Header>\n            <Sender>ESS_UTUMISHI</Sender>\n            <Receiver>ZE DONE</Receiver>\n            <FSPCode>{{fsp_code}}</FSPCode>\n            <MsgId>MONTHLY_DED_{{timestamp}}</MsgId>\n            <MessageType>FSP_MONTHLY_DEDUCTIONS</MessageType>\n        </Header>\n        <MessageDetails>\n            <Month>2025-01</Month>\n            <TotalDeductions>5000000</TotalDeductions>\n            <NumberOfEmployees>100</NumberOfEmployees>\n        </MessageDetails>\n    </Data>\n</Document>"
+        },
+        "url": {
+          "raw": "{{api_endpoint}}",
+          "host": ["{{base_url}}"],
+          "path": ["api", "loan"]
+        }
+      }
+    },
+    {
+      "name": "FSP_REPAYMENT_REQUEST",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/xml"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<Document>\n    <Data>\n        <Header>\n            <Sender>ESS_UTUMISHI</Sender>\n            <Receiver>ZE DONE</Receiver>\n            <FSPCode>{{fsp_code}}</FSPCode>\n            <MsgId>REPAY_REQ_{{timestamp}}</MsgId>\n            <MessageType>FSP_REPAYMENT_REQUEST</MessageType>\n        </Header>\n        <MessageDetails>\n            <CheckNumber>CHK{{timestamp}}</CheckNumber>\n            <LoanNumber>LOAN{{timestamp}}</LoanNumber>\n            <RepaymentAmount>150000</RepaymentAmount>\n            <RepaymentDate>2025-01-15</RepaymentDate>\n        </MessageDetails>\n    </Data>\n</Document>"
+        },
+        "url": {
+          "raw": "{{api_endpoint}}",
+          "host": ["{{base_url}}"],
+          "path": ["api", "loan"]
+        }
+      }
+    },
+    {
+      "name": "LOAN_CANCELLATION_NOTIFICATION",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/xml"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<Document>\n    <Data>\n        <Header>\n            <Sender>ESS_UTUMISHI</Sender>\n            <Receiver>ZE DONE</Receiver>\n            <FSPCode>{{fsp_code}}</FSPCode>\n            <MsgId>CANCEL_{{timestamp}}</MsgId>\n            <MessageType>LOAN_CANCELLATION_NOTIFICATION</MessageType>\n        </Header>\n        <MessageDetails>\n            <ApplicationNumber>APP{{timestamp}}</ApplicationNumber>\n            <Reason>Employee Request</Reason>\n            <CancellationDate>2025-01-01</CancellationDate>\n        </MessageDetails>\n    </Data>\n</Document>"
+        },
+        "url": {
+          "raw": "{{api_endpoint}}",
+          "host": ["{{base_url}}"],
+          "path": ["api", "loan"]
+        }
+      }
+    },
+    {
+      "name": "LOAN_CHARGES_REQUEST",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/xml"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<Document>\n    <Data>\n        <Header>\n            <Sender>ESS_UTUMISHI</Sender>\n            <Receiver>ZE DONE</Receiver>\n            <FSPCode>{{fsp_code}}</FSPCode>\n            <MsgId>CHARGES_{{timestamp}}</MsgId>\n            <MessageType>LOAN_CHARGES_REQUEST</MessageType>\n        </Header>\n        <MessageDetails>\n            <CheckNumber>CHK{{timestamp}}</CheckNumber>\n            <DesignationCode>D001</DesignationCode>\n            <DesignationName>Teacher</DesignationName>\n            <BasicSalary>1500000</BasicSalary>\n            <NetSalary>1400000</NetSalary>\n            <OneThirdAmount>500000</OneThirdAmount>\n            <DeductibleAmount>100000</DeductibleAmount>\n            <RetirementDate>2050-01-01</RetirementDate>\n            <TermsOfEmployment>PERMANENT</TermsOfEmployment>\n            <RequestedAmount>5000000</RequestedAmount>\n            <DesiredDeductibleAmount>150000</DesiredDeductibleAmount>\n            <Tenure>24</Tenure>\n            <ProductCode>17</ProductCode>\n            <VoteCode>V001</VoteCode>\n            <TotalEmployeeDeduction>100000</TotalEmployeeDeduction>\n            <JobClassCode>J001</JobClassCode>\n        </MessageDetails>\n    </Data>\n</Document>"
+        },
+        "url": {
+          "raw": "{{api_endpoint}}",
+          "host": ["{{base_url}}"],
+          "path": ["api", "loan"]
+        }
+      }
+    },
+    {
+      "name": "LOAN_OFFER_REQUEST",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/xml"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<Document>\n    <Data>\n        <Header>\n            <Sender>ESS_UTUMISHI</Sender>\n            <Receiver>ZE DONE</Receiver>\n            <FSPCode>{{fsp_code}}</FSPCode>\n            <MsgId>OFFER_{{timestamp}}</MsgId>\n            <MessageType>LOAN_OFFER_REQUEST</MessageType>\n        </Header>\n        <MessageDetails>\n            <CheckNumber>111222333</CheckNumber>\n            <FirstName>Juma</FirstName>\n            <MiddleName>Ponda</MiddleName>\n            <LastName>Mali</LastName>\n            <Sex>M</Sex>\n            <BankAccountNumber>011445888578</BankAccountNumber>\n            <EmploymentDate>2020-07-01</EmploymentDate>\n            <MaritalStatus>Married</MaritalStatus>\n            <ConfirmationDate>2021-07-01</ConfirmationDate>\n            <TotalEmployeeDeduction>205500</TotalEmployeeDeduction>\n            <NearestBranchName>A Manyoni</NearestBranchName>\n            <NearestBranchCode>AX002</NearestBranchCode>\n            <VoteCode>32</VoteCode>\n            <VoteName>XYZ</VoteName>\n            <NIN>19870527111450000124</NIN>\n            <DesignationCode>TZ800186</DesignationCode>\n            <DesignationName>ICTOII</DesignationName>\n            <BasicSalary>5000.00</BasicSalary>\n            <NetSalary>100.00</NetSalary>\n            <OneThirdAmount>120000.00</OneThirdAmount>\n            <RequestedAmount>5000.00</RequestedAmount>\n            <DesiredDeductibleAmount>12000.00</DesiredDeductibleAmount>\n            <RetirementDate>3</RetirementDate>\n            <TermsOfEmployment>Permanent and Pensionable</TermsOfEmployment>\n            <Tenure>45</Tenure>\n            <ProductCode>17</ProductCode>\n            <InterestRate>20.00</InterestRate>\n            <ProcessingFee>200.00</ProcessingFee>\n            <Insurance>500.00</Insurance>\n            <PhysicalAddress>Arusha</PhysicalAddress>\n            <EmailAddress>abc.abc@instution.com</EmailAddress>\n            <MobileNumber>0758484339</MobileNumber>\n            <ApplicationNumber>0021000</ApplicationNumber>\n            <LoanPurpose>Mkopo wakujenga nyumba</LoanPurpose>\n            <ContractStartDate>2011-02-25</ContractStartDate>\n            <ContractEndDate>2025-02-25</ContractEndDate>\n            <SwiftCode>AXB02</SwiftCode>\n            <Funding>OS</Funding>\n        </MessageDetails>\n    </Data>\n</Document>"
+        },
+        "url": {
+          "raw": "{{api_endpoint}}",
+          "host": ["{{base_url}}"],
+          "path": ["api", "loan"]
+        }
+      }
+    },
+    {
+      "name": "LOAN_FINAL_APPROVAL_NOTIFICATION",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/xml"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<Document>\n    <Data>\n        <Header>\n            <Sender>ESS_UTUMISHI</Sender>\n            <Receiver>ZE DONE</Receiver>\n            <FSPCode>{{fsp_code}}</FSPCode>\n            <MsgId>FINAL_APPROVAL_{{timestamp}}</MsgId>\n            <MessageType>LOAN_FINAL_APPROVAL_NOTIFICATION</MessageType>\n        </Header>\n        <MessageDetails>\n            <ApplicationNumber>APP{{timestamp}}</ApplicationNumber>\n            <FSPReferenceNumber>FSP{{timestamp}}</FSPReferenceNumber>\n            <LoanNumber>LOAN{{timestamp}}</LoanNumber>\n            <Approval>APPROVED</Approval>\n            <NIN>1234567890123456</NIN>\n            <FirstName>John</FirstName>\n            <LastName>Doe</LastName>\n            <MobileNo>0712345678</MobileNo>\n            <Sex>M</Sex>\n            <DateOfBirth>1990-01-01</DateOfBirth>\n            <EmploymentDate>2020-01-01</EmploymentDate>\n            <BankAccountNumber>1234567890</BankAccountNumber>\n            <SwiftCode>TESTSWFT</SwiftCode>\n            <CheckNumber>CHK{{timestamp}}</CheckNumber>\n            <RequestedAmount>5000000</RequestedAmount>\n            <ProductCode>17</ProductCode>\n            <Tenure>24</Tenure>\n            <InterestRate>28</InterestRate>\n            <ProcessingFee>500</ProcessingFee>\n            <Insurance>200</Insurance>\n        </MessageDetails>\n    </Data>\n</Document>"
+        },
+        "url": {
+          "raw": "{{api_endpoint}}",
+          "host": ["{{base_url}}"],
+          "path": ["api", "loan"]
+        }
+      }
+    },
+    {
+      "name": "LOAN_RESTRUCTURE_AFFORDABILITY_REQUEST",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/xml"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<Document>\n    <Data>\n        <Header>\n            <Sender>ESS_UTUMISHI</Sender>\n            <Receiver>ZE DONE</Receiver>\n            <FSPCode>{{fsp_code}}</FSPCode>\n            <MsgId>RESTRUCTURE_AFF_{{timestamp}}</MsgId>\n            <MessageType>LOAN_RESTRUCTURE_AFFORDABILITY_REQUEST</MessageType>\n        </Header>\n        <MessageDetails>\n            <CheckNumber>CHK{{timestamp}}</CheckNumber>\n            <LoanNumber>LOAN{{timestamp}}</LoanNumber>\n            <CurrentSalary>1500000</CurrentSalary>\n            <RequestedTenure>36</RequestedTenure>\n        </MessageDetails>\n    </Data>\n</Document>"
+        },
+        "url": {
+          "raw": "{{api_endpoint}}",
+          "host": ["{{base_url}}"],
+          "path": ["api", "loan"]
+        }
+      }
+    },
+    {
+      "name": "LOAN_RESTRUCTURE_REJECTION",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/xml"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<Document>\n    <Data>\n        <Header>\n            <Sender>ESS_UTUMISHI</Sender>\n            <Receiver>ZE DONE</Receiver>\n            <FSPCode>{{fsp_code}}</FSPCode>\n            <MsgId>RESTRUCTURE_REJ_{{timestamp}}</MsgId>\n            <MessageType>LOAN_RESTRUCTURE_REJECTION</MessageType>\n        </Header>\n        <MessageDetails>\n            <CheckNumber>CHK{{timestamp}}</CheckNumber>\n            <LoanNumber>LOAN{{timestamp}}</LoanNumber>\n            <Reason>Not Eligible</Reason>\n        </MessageDetails>\n    </Data>\n</Document>"
+        },
+        "url": {
+          "raw": "{{api_endpoint}}",
+          "host": ["{{base_url}}"],
+          "path": ["api", "loan"]
+        }
+      }
+    },
+    {
+      "name": "LOAN_RESTRUCTURE_REQUEST",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/xml"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<Document>\n    <Data>\n        <Header>\n            <Sender>ESS_UTUMISHI</Sender>\n            <Receiver>ZE DONE</Receiver>\n            <FSPCode>{{fsp_code}}</FSPCode>\n            <MsgId>RESTRUCTURE_REQ_{{timestamp}}</MsgId>\n            <MessageType>LOAN_RESTRUCTURE_REQUEST</MessageType>\n        </Header>\n        <MessageDetails>\n            <CheckNumber>CHK{{timestamp}}</CheckNumber>\n            <LoanNumber>LOAN{{timestamp}}</LoanNumber>\n            <NewTenure>36</NewTenure>\n            <Reason>Financial Difficulty</Reason>\n        </MessageDetails>\n    </Data>\n</Document>"
+        },
+        "url": {
+          "raw": "{{api_endpoint}}",
+          "host": ["{{base_url}}"],
+          "path": ["api", "loan"]
+        }
+      }
+    },
+    {
+      "name": "LOAN_TAKEOVER_OFFER_REQUEST",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/xml"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<Document>\n    <Data>\n        <Header>\n            <Sender>ESS_UTUMISHI</Sender>\n            <Receiver>ZE DONE</Receiver>\n            <FSPCode>{{fsp_code}}</FSPCode>\n            <MsgId>TAKEOVER_OFFER_{{timestamp}}</MsgId>\n            <MessageType>LOAN_TAKEOVER_OFFER_REQUEST</MessageType>\n        </Header>\n        <MessageDetails>\n            <CheckNumber>CHK{{timestamp}}</CheckNumber>\n            <CurrentFSPCode>OTHERFSP</CurrentFSPCode>\n            <OutstandingAmount>3000000</OutstandingAmount>\n            <MonthlyInstallment>150000</MonthlyInstallment>\n            <RemainingTenure>20</RemainingTenure>\n        </MessageDetails>\n    </Data>\n</Document>"
+        },
+        "url": {
+          "raw": "{{api_endpoint}}",
+          "host": ["{{base_url}}"],
+          "path": ["api", "loan"]
+        }
+      }
+    },
+    {
+      "name": "PARTIAL_LOAN_REPAYMENT_REQUEST",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/xml"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<Document>\n    <Data>\n        <Header>\n            <Sender>ESS_UTUMISHI</Sender>\n            <Receiver>ZE DONE</Receiver>\n            <FSPCode>{{fsp_code}}</FSPCode>\n            <MsgId>PARTIAL_REPAY_{{timestamp}}</MsgId>\n            <MessageType>PARTIAL_LOAN_REPAYMENT_REQUEST</MessageType>\n        </Header>\n        <MessageDetails>\n            <CheckNumber>CHK{{timestamp}}</CheckNumber>\n            <LoanNumber>LOAN{{timestamp}}</LoanNumber>\n            <RepaymentAmount>500000</RepaymentAmount>\n            <RepaymentDate>2025-01-15</RepaymentDate>\n        </MessageDetails>\n    </Data>\n</Document>"
+        },
+        "url": {
+          "raw": "{{api_endpoint}}",
+          "host": ["{{base_url}}"],
+          "path": ["api", "loan"]
+        }
+      }
+    },
+    {
+      "name": "REPAYMENT_0FF_BALANCE_REQUEST_TO_FSP",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/xml"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<Document>\n    <Data>\n        <Header>\n            <Sender>ESS_UTUMISHI</Sender>\n            <Receiver>ZE DONE</Receiver>\n            <FSPCode>{{fsp_code}}</FSPCode>\n            <MsgId>REPAY_OFF_BAL_{{timestamp}}</MsgId>\n            <MessageType>REPAYMENT_0FF_BALANCE_REQUEST_TO_FSP</MessageType>\n        </Header>\n        <MessageDetails>\n            <CheckNumber>CHK{{timestamp}}</CheckNumber>\n            <LoanNumber>LOAN{{timestamp}}</LoanNumber>\n            <OutstandingBalance>1000000</OutstandingBalance>\n        </MessageDetails>\n    </Data>\n</Document>"
+        },
+        "url": {
+          "raw": "{{api_endpoint}}",
+          "host": ["{{base_url}}"],
+          "path": ["api", "loan"]
+        }
+      }
+    },
+    {
+      "name": "TAKEOVER_PAY_OFF_BALANCE_REQUEST",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/xml"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<Document>\n    <Data>\n        <Header>\n            <Sender>ESS_UTUMISHI</Sender>\n            <Receiver>ZE DONE</Receiver>\n            <FSPCode>{{fsp_code}}</FSPCode>\n            <MsgId>TAKEOVER_PAYOFF_{{timestamp}}</MsgId>\n            <MessageType>TAKEOVER_PAY_OFF_BALANCE_REQUEST</MessageType>\n        </Header>\n        <MessageDetails>\n            <CheckNumber>CHK{{timestamp}}</CheckNumber>\n            <CurrentFSPCode>OTHERFSP</CurrentFSPCode>\n            <OutstandingAmount>3000000</OutstandingAmount>\n        </MessageDetails>\n    </Data>\n</Document>"
+        },
+        "url": {
+          "raw": "{{api_endpoint}}",
+          "host": ["{{base_url}}"],
+          "path": ["api", "loan"]
+        }
+      }
+    },
+    {
+      "name": "TAKEOVER_PAYMENT_NOTIFICATION",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/xml"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<Document>\n    <Data>\n        <Header>\n            <Sender>ESS_UTUMISHI</Sender>\n            <Receiver>ZE DONE</Receiver>\n            <FSPCode>{{fsp_code}}</FSPCode>\n            <MsgId>TAKEOVER_PAY_NOTIF_{{timestamp}}</MsgId>\n            <MessageType>TAKEOVER_PAYMENT_NOTIFICATION</MessageType>\n        </Header>\n        <MessageDetails>\n            <CheckNumber>CHK{{timestamp}}</CheckNumber>\n            <CurrentFSPCode>OTHERFSP</CurrentFSPCode>\n            <PaymentAmount>3000000</PaymentAmount>\n            <PaymentDate>2025-01-01</PaymentDate>\n        </MessageDetails>\n    </Data>\n</Document>"
+        },
+        "url": {
+          "raw": "{{api_endpoint}}",
+          "host": ["{{base_url}}"],
+          "path": ["api", "loan"]
+        }
+      }
+    },
+    {
+      "name": "TOP_UP_OFFER_REQUEST",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/xml"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<Document>\n    <Data>\n        <Header>\n            <Sender>ESS_UTUMISHI</Sender>\n            <Receiver>ZE DONE</Receiver>\n            <FSPCode>{{fsp_code}}</FSPCode>\n            <MsgId>TOPUP_OFFER_{{timestamp}}</MsgId>\n            <MessageType>TOP_UP_OFFER_REQUEST</MessageType>\n        </Header>\n        <MessageDetails>\n            <CheckNumber>CHK{{timestamp}}</CheckNumber>\n            <ExistingLoanNumber>LOAN{{timestamp}}</ExistingLoanNumber>\n            <AdditionalAmount>2000000</AdditionalAmount>\n            <NewTenure>30</NewTenure>\n        </MessageDetails>\n    </Data>\n</Document>"
+        },
+        "url": {
+          "raw": "{{api_endpoint}}",
+          "host": ["{{base_url}}"],
+          "path": ["api", "loan"]
+        }
+      }
+    },
+    {
+      "name": "TOP_UP_PAY_0FF_BALANCE_REQUEST",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/xml"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<Document>\n    <Data>\n        <Header>\n            <Sender>ESS_UTUMISHI</Sender>\n            <Receiver>ZE DONE</Receiver>\n            <FSPCode>{{fsp_code}}</FSPCode>\n            <MsgId>TOPUP_PAYOFF_{{timestamp}}</MsgId>\n            <MessageType>TOP_UP_PAY_0FF_BALANCE_REQUEST</MessageType>\n        </Header>\n        <MessageDetails>\n            <CheckNumber>CHK{{timestamp}}</CheckNumber>\n            <ExistingLoanNumber>LOAN{{timestamp}}</ExistingLoanNumber>\n            <OutstandingBalance>1000000</OutstandingBalance>\n        </MessageDetails>\n    </Data>\n</Document>"
+        },
+        "url": {
+          "raw": "{{api_endpoint}}",
+          "host": ["{{base_url}}"],
+          "path": ["api", "loan"]
+        }
+      }
+    }
+  ]
+}

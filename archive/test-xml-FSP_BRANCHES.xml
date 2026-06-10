@@ -1,0 +1,20 @@
+<Document>
+  <Data>
+    <Header>
+      <Sender>ZE DONE</Sender>
+      <Receiver>ESS_UTUMISHI</Receiver>
+      <FSPCode>1001</FSPCode>
+      <MsgId>MSGID124</MsgId>
+      <MessageType>FSP_BRANCHES</MessageType>
+    </Header>
+    <MessageDetails>
+      <BranchList>
+        <Branch>
+          <BranchCode>BR001</BranchCode>
+          <BranchName>Main Branch</BranchName>
+        </Branch>
+      </BranchList>
+    </MessageDetails>
+  </Data>
+  <Signature>Signature</Signature>
+</Document>

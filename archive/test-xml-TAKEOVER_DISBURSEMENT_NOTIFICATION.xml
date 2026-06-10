@@ -1,0 +1,17 @@
+<Document>
+  <Data>
+    <Header>
+      <Sender>ZE DONE</Sender>
+      <Receiver>ESS_UTUMISHI</Receiver>
+      <FSPCode>1001</FSPCode>
+      <MsgId>MSGID132</MsgId>
+      <MessageType>TAKEOVER_DISBURSEMENT_NOTIFICATION</MessageType>
+    </Header>
+    <MessageDetails>
+      <ApplicationNumber>APP005</ApplicationNumber>
+      <TakeoverAmount>15000</TakeoverAmount>
+      <TakeoverDate>2025-11-26</TakeoverDate>
+    </MessageDetails>
+  </Data>
+  <Signature>Signature</Signature>
+</Document>

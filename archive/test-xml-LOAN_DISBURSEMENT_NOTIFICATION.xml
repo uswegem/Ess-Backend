@@ -1,0 +1,17 @@
+<Document>
+  <Data>
+    <Header>
+      <Sender>ZE DONE</Sender>
+      <Receiver>ESS_UTUMISHI</Receiver>
+      <FSPCode>1001</FSPCode>
+      <MsgId>MSGID126</MsgId>
+      <MessageType>LOAN_DISBURSEMENT_NOTIFICATION</MessageType>
+    </Header>
+    <MessageDetails>
+      <ApplicationNumber>APP002</ApplicationNumber>
+      <Amount>10000</Amount>
+      <DisbursementDate>2025-11-26</DisbursementDate>
+    </MessageDetails>
+  </Data>
+  <Signature>Signature</Signature>
+</Document>

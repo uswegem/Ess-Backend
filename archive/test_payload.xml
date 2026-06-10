@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Document>
+    <Data>
+        <Header>
+            <Sender>ESS_UTUMISHI</Sender>
+            <Receiver>ZE DONE</Receiver>
+            <FSPCode>FL8090</FSPCode>
+            <MsgId>OFFER_TEST</MsgId>
+            <MessageType>LOAN_OFFER_REQUEST</MessageType>
+        </Header>
+        <MessageDetails>
+            <CheckNumber>111222333</CheckNumber>
+            <FirstName>Juma</FirstName>
+            <MiddleName>Ponda</MiddleName>
+            <LastName>Mali</LastName>
+            <Sex>M</Sex>
+            <BankAccountNumber>011445888578</BankAccountNumber>
+            <EmploymentDate>2020-07-01</EmploymentDate>
+            <MaritalStatus>Married</MaritalStatus>
+            <ConfirmationDate>2021-07-01</ConfirmationDate>
+            <TotalEmployeeDeduction>205500</TotalEmployeeDeduction>
+            <NearestBranchName>A Manyoni</NearestBranchName>
+            <NearestBranchCode>AX002</NearestBranchCode>
+            <VoteCode>32</VoteCode>
+            <VoteName>XYZ</VoteName>
+            <NIN>19870527111450000126</NIN>
+            <DesignationCode>TZ800186</DesignationCode>
+            <DesignationName>ICTOII</DesignationName>
+            <BasicSalary>5000.00</BasicSalary>
+            <NetSalary>100.00</NetSalary>
+            <OneThirdAmount>120000.00</OneThirdAmount>
+            <RequestedAmount>5000.00</RequestedAmount>
+            <DesiredDeductibleAmount>12000.00</DesiredDeductibleAmount>
+            <RetirementDate>3</RetirementDate>
+            <TermsOfEmployment>Permanent and Pensionable</TermsOfEmployment>
+            <Tenure>45</Tenure>
+            <ProductCode>17</ProductCode>
+            <InterestRate>20.00</InterestRate>
+            <ProcessingFee>200.00</ProcessingFee>
+            <Insurance>500.00</Insurance>
+            <PhysicalAddress>Arusha</PhysicalAddress>
+            <EmailAddress>abc.abc@instution.com</EmailAddress>
+            <MobileNumber>0758484339</MobileNumber>
+            <ApplicationNumber>0021000</ApplicationNumber>
+            <LoanPurpose>Mkopo wakujenga nyumba</LoanPurpose>
+            <ContractStartDate>2011-02-25</ContractStartDate>
+            <ContractEndDate>2025-02-25</ContractEndDate>
+            <SwiftCode>AXB02</SwiftCode>
+            <Funding>OS</Funding>
+        </MessageDetails>
+    </Data>
+</Document>

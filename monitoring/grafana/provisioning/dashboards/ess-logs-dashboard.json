@@ -1,0 +1,113 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "ESS Loan Processing Logs",
+    "tags": ["ess", "loans", "logs"],
+    "style": "dark",
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "LOAN_OFFER_REQUEST Processing",
+        "type": "logs",
+        "targets": [
+          {
+            "expr": "{service=\"ess-app\"} |= \"LOAN_OFFER_REQUEST\"",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 0
+        },
+        "options": {
+          "showTime": true,
+          "showLabels": true,
+          "showCommonLabels": false,
+          "wrapLogMessage": true,
+          "prettifyLogMessage": false,
+          "enableLogDetails": true,
+          "dedupStrategy": "none",
+          "sortOrder": "Descending"
+        }
+      },
+      {
+        "id": 2,
+        "title": "LOAN_INITIAL_APPROVAL_NOTIFICATION Callbacks",
+        "type": "logs",
+        "targets": [
+          {
+            "expr": "{service=\"ess-app\"} |= \"LOAN_INITIAL_APPROVAL_NOTIFICATION\"",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 0
+        }
+      },
+      {
+        "id": 3,
+        "title": "All Message Types Processing",
+        "type": "logs",
+        "targets": [
+          {
+            "expr": "{service=\"ess-app\"} |= \"MessageType\"",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 24,
+          "x": 0,
+          "y": 8
+        }
+      },
+      {
+        "id": 4,
+        "title": "Error Logs",
+        "type": "logs",
+        "targets": [
+          {
+            "expr": "{service=\"ess-app\",level=\"error\"}",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 24,
+          "x": 0,
+          "y": 16
+        }
+      },
+      {
+        "id": 5,
+        "title": "Callback Activity",
+        "type": "logs",
+        "targets": [
+          {
+            "expr": "{service=\"ess-app\"} |= \"callback\" or \"sendCallback\" or \"Scheduled\"",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 24,
+          "x": 0,
+          "y": 24
+        }
+      }
+    ],
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "refresh": "5s",
+    "schemaVersion": 30,
+    "version": 1
+  }
+}

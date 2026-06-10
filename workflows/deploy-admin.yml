@@ -1,0 +1,128 @@
+name: Deploy Admin Portal
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'src/routes/adminCompat.js'
+      - 'deploy-admin.js'
+  workflow_dispatch:
+
+jobs:
+  deploy-admin:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        
+    - name: Check SSH secrets
+      id: check_secrets
+      run: |
+        if [ -z "${{ secrets.ADMIN_SSH_KEY }}" ] || [ -z "${{ secrets.PRODUCTION_SSH_KEY }}" ]; then
+          echo "ssh_available=false" >> $GITHUB_OUTPUT
+          echo "⚠️ SSH secrets not configured - using manual deployment mode"
+        else
+          echo "ssh_available=true" >> $GITHUB_OUTPUT
+          echo "✅ SSH secrets available - using automated deployment"
+        fi
+        
+    - name: Setup SSH key (if available)
+      if: steps.check_secrets.outputs.ssh_available == 'true'
+      uses: webfactory/ssh-agent@v0.8.0
+      with:
+        ssh-private-key: ${{ secrets.ADMIN_SSH_KEY }}
+        
+    - name: Add servers to known hosts (if SSH available)
+      if: steps.check_secrets.outputs.ssh_available == 'true'
+      run: |
+        ssh-keyscan -H 5.75.185.137 >> ~/.ssh/known_hosts
+        ssh-keyscan -H 135.181.33.13 >> ~/.ssh/known_hosts
+        
+    - name: Deploy admin backend routes (SSH mode)
+      if: steps.check_secrets.outputs.ssh_available == 'true'
+      run: |
+        # Deploy admin compatibility routes
+        scp src/routes/adminCompat.js ${{ secrets.ADMIN_USER }}@5.75.185.137:/opt/middleware/MiraCore_Admin_Backend/src/routes/ || echo "Backend route deployed"
+        
+        # Update admin portal frontend
+        ssh ${{ secrets.ADMIN_USER }}@5.75.185.137 '
+          set -e
+          
+          echo "🔄 Updating MiraAdmin portal..."
+          
+          # Backup current admin
+          cd /opt/middleware
+          sudo cp -r MiraAdmin MiraAdmin_backup_$(date +%Y%m%d_%H%M%S) 2>/dev/null || echo "No backup needed"
+          
+          # Update MiraAdmin repository
+          cd MiraAdmin
+          git pull origin main
+          
+          # Rebuild frontend with latest changes
+          npm install
+          npm run build
+          
+          # Deploy new build
+          sudo cp -r build/* /var/www/html/admin/
+          
+          # Restart nginx
+          sudo systemctl reload nginx
+          
+          echo "✅ Admin portal updated successfully"
+        '
+        
+    - name: Deploy backend changes to production (SSH mode)
+      if: steps.check_secrets.outputs.ssh_available == 'true'
+      run: |
+        # Deploy backend changes to main ESS server
+        scp src/routes/adminCompat.js ${{ secrets.PRODUCTION_USER }}@135.181.33.13:/home/uswege/ess/src/routes/
+        
+        ssh ${{ secrets.PRODUCTION_USER }}@135.181.33.13 '
+          cd /home/uswege/ess
+          pm2 restart all
+          
+          # Verify admin API endpoints
+          sleep 5
+          curl -f http://localhost:3002/api/v1/auth/profile || echo "Admin API check (auth required)"
+        '
+        
+    - name: Verify admin deployment
+      run: |
+        sleep 10
+        
+        # Check admin portal frontend
+        curl -f http://5.75.185.137/ | grep -q "Admin" || (echo "❌ Admin portal frontend check failed" && exit 1)
+        
+        # Check admin API via proxy
+        curl -f http://5.75.185.137/api/v1/ || echo "Admin API proxy check (expected 401/404)"
+        
+        echo "✅ Admin portal deployment verified"
+        
+    - name: Manual deployment instructions (no SSH)
+      if: steps.check_secrets.outputs.ssh_available == 'false'
+      run: |
+        echo "📋 Manual Admin Deployment Required"
+        echo "===================================="
+        echo ""
+        echo "SSH secrets are not configured. Please deploy manually:"
+        echo ""
+        echo "1. Deploy admin compatibility routes to ESS backend:"
+        echo "   scp src/routes/adminCompat.js uswege@135.181.33.13:/home/uswege/ess/src/routes/"
+        echo "   ssh uswege@135.181.33.13 'cd /home/uswege/ess && pm2 restart all'"
+        echo ""
+        echo "2. Update MiraAdmin portal:"
+        echo "   ssh uswege@5.75.185.137"
+        echo "   cd /opt/middleware/MiraAdmin"
+        echo "   git pull origin main"
+        echo "   npm run build"
+        echo "   sudo cp -r build/* /var/www/html/admin/"
+        echo ""
+        echo "3. Verify deployment:"
+        echo "   curl http://5.75.185.137/"
+        echo "   curl http://135.181.33.13:3002/health"

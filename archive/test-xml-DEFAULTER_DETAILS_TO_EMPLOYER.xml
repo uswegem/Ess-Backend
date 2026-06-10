@@ -1,0 +1,21 @@
+<Document>
+  <Data>
+    <Header>
+      <Sender>ZE DONE</Sender>
+      <Receiver>ESS_UTUMISHI</Receiver>
+      <FSPCode>1001</FSPCode>
+      <MsgId>MSGID123</MsgId>
+      <MessageType>DEFAULTER_DETAILS_TO_EMPLOYER</MessageType>
+    </Header>
+    <MessageDetails>
+      <EmployerCode>EMP123</EmployerCode>
+      <DefaulterList>
+        <Defaulter>
+          <Name>John Doe</Name>
+          <LoanNumber>LN001</LoanNumber>
+        </Defaulter>
+      </DefaulterList>
+    </MessageDetails>
+  </Data>
+  <Signature>Signature</Signature>
+</Document>

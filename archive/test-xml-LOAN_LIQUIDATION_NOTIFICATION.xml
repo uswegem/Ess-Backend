@@ -1,0 +1,16 @@
+<Document>
+  <Data>
+    <Header>
+      <Sender>ZE DONE</Sender>
+      <Receiver>ESS_UTUMISHI</Receiver>
+      <FSPCode>1001</FSPCode>
+      <MsgId>MSGID128</MsgId>
+      <MessageType>LOAN_LIQUIDATION_NOTIFICATION</MessageType>
+    </Header>
+    <MessageDetails>
+      <ApplicationNumber>APP004</ApplicationNumber>
+      <LiquidationDate>2025-11-26</LiquidationDate>
+    </MessageDetails>
+  </Data>
+  <Signature>Signature</Signature>
+</Document>

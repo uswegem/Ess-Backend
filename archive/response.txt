@@ -1,0 +1,42 @@
+Note: Unnecessary use of -X or --request, POST is already inferred.
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0*   Trying 135.181.33.13:3002...
+* Connected to 135.181.33.13 (135.181.33.13) port 3002
+* using HTTP/1.x
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0> POST /api/loan HTTP/1.1
+> Host: 135.181.33.13:3002
+> User-Agent: curl/8.14.1
+> Content-Type: application/xml
+> Accept: application/xml
+> Content-Length: 2376
+> 
+} [2376 bytes data]
+* upload completely sent off: 2376 bytes
+< HTTP/1.1 200 OK
+< Content-Security-Policy: default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests
+< Cross-Origin-Opener-Policy: same-origin
+< Cross-Origin-Resource-Policy: same-origin
+< Origin-Agent-Cluster: ?1
+< Referrer-Policy: no-referrer
+< Strict-Transport-Security: max-age=15552000; includeSubDomains
+< X-Content-Type-Options: nosniff
+< X-DNS-Prefetch-Control: off
+< X-Download-Options: noopen
+< X-Frame-Options: SAMEORIGIN
+< X-Permitted-Cross-Domain-Policies: none
+< X-XSS-Protection: 0
+< Access-Control-Allow-Origin: *
+< X-RateLimit-Limit: 100
+< X-RateLimit-Remaining: 99
+< Date: Tue, 04 Nov 2025 16:53:35 GMT
+< X-RateLimit-Reset: 1762276116
+< Content-Type: application/json; charset=utf-8
+< Content-Length: 16
+< ETag: W/"10-oV4hJxRVSENxc/wX8+mA4/Pe4tA"
+< Connection: keep-alive
+< Keep-Alive: timeout=5
+< 
+{ [16 bytes data]
+100  2392  100    16  100  2376     26   3984 --:--:-- --:--:-- --:--:--  4006{"success":true}
+* Connection #0 to host 135.181.33.13 left intact

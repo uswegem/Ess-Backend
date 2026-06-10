@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Document>
+    <Data>
+        <Header>
+            <MessageType>LOAN_OFFER_REQUEST</MessageType>
+            <Sender>ESS_UTUMISHI</Sender>
+            <Receiver>ZE DONE</Receiver>
+            <FSPCode>FL8090</FSPCode>
+            <MsgId>LOAN_$(date +%s)</MsgId>
+        </Header>
+        <MessageDetails>
+            <CheckNumber>CHK001</CheckNumber>
+            <FirstName>John</FirstName>
+            <MiddleName></MiddleName>
+            <LastName>Doe</LastName>
+            <Sex>M</Sex>
+            <EmploymentDate>2020-01-01</EmploymentDate>
+            <MaritalStatus>Single</MaritalStatus>
+            <ConfirmationDate>2020-07-01</ConfirmationDate>
+            <BankAccountNumber>1234567890</BankAccountNumber>
+            <NearestBranchName>Main Branch</NearestBranchName>
+            <NearestBranchCode>BR001</NearestBranchCode>
+            <VoteCode>V001</VoteCode>
+            <VoteName>Education</VoteName>
+            <NIN>CM12345678901234</NIN>
+            <DesignationCode>D001</DesignationCode>
+            <DesignationName>Teacher</DesignationName>
+            <BasicSalary>1500000</BasicSalary>
+            <NetSalary>1400000</NetSalary>
+            <OneThirdAmount>500000</OneThirdAmount>
+            <TotalEmployeeDeduction>100000</TotalEmployeeDeduction>
+            <RetirementDate>2050-01-01</RetirementDate>
+            <TermsOfEmployment>PERMANENT</TermsOfEmployment>
+            <RequestedAmount>5000000</RequestedAmount>
+            <DesiredDeductibleAmount>150000</DesiredDeductibleAmount>
+            <Tenure>36</Tenure>
+            <ProductCode>4</ProductCode>
+            <InterestRate>20</InterestRate>
+            <ProcessingFee>2</ProcessingFee>
+            <Insurance>1</Insurance>
+            <PhysicalAddress>123 Main St, Dar es Salaam</PhysicalAddress>
+            <TelephoneNumber>+255123456789</TelephoneNumber>
+            <EmailAddress>john.doe@example.com</EmailAddress>
+            <MobileNumber>0789123456</MobileNumber>
+            <ApplicationNumber>APP001</ApplicationNumber>
+            <LoanPurpose>Home Improvement</LoanPurpose>
+            <ContractStartDate>2020-01-01</ContractStartDate>
+            <ContractEndDate>2050-01-01</ContractEndDate>
+            <SwiftCode>SWIFTCODE123</SwiftCode>
+            <Funding>SALARY</Funding>
+        </MessageDetails>
+    </Data>
+</Document>

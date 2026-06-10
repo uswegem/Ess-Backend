@@ -1,0 +1,116 @@
+{
+  "info": {
+    "name": "TOP_UP_OFFER_REQUEST - ESS1764845570921",
+    "_postman_id": "top-up-offer-ess1764845570921",
+    "description": "Top-up loan offer request for ESS application ESS1764845570921",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "TOP_UP_OFFER_REQUEST - ESS1764845570921",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "// Set dynamic timestamp",
+              "pm.globals.set('timestamp', Date.now());"
+            ],
+            "type": "text/javascript"
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test('Response contains success code', function () {",
+              "    const responseXml = xml2Json(pm.response.text());",
+              "    pm.expect(responseXml.Document.Data.MessageDetails.ResponseCode).to.eql('8000');",
+              "});",
+              "",
+              "pm.test('Response time is acceptable', function () {",
+              "    pm.expect(pm.response.responseTime).to.be.below(5000);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/xml",
+            "type": "text"
+          },
+          {
+            "key": "Accept",
+            "value": "application/xml",
+            "type": "text"
+          },
+          {
+            "key": "User-Agent",
+            "value": "UTUMISHI-ESS/1.0",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "<Document><Data><Header><Sender>ESS_UTUMISHI</Sender><Receiver>ZE DONE</Receiver><FSPCode>FL8090</FSPCode><MsgId>1c6f3d0ed10111f09e549df0bf9c67e1</MsgId><MessageType>TOP_UP_OFFER_REQUEST</MessageType></Header><MessageDetails><CheckNumber>110977381</CheckNumber><FirstName>MARRY</FirstName><MiddleName>EDWARD</MiddleName><LastName>NTIGA</LastName><VoteCode>32</VoteCode><VoteName>President's Office - Public Service Management and Good Governance</VoteName><NIN>19850612141150000220</NIN><DesignationCode>TZ400102</DesignationCode><DesignationName>Senior Human Resource Officer I</DesignationName><BasicSalary>1765000.00</BasicSalary><NetSalary>1089727.03</NetSalary><OneThirdAmount>588333.00</OneThirdAmount><RequestedAmount>13000000.00</RequestedAmount><DesiredDeductibleAmount>317975.45</DesiredDeductibleAmount><RetirementDate>233</RetirementDate><TermsOfEmployment>Permanent and Pensionable</TermsOfEmployment><Tenure>96</Tenure><ProductCode>17</ProductCode><InterestRate>17002327.14</InterestRate><ProcessingFee>270466.32</ProcessingFee><Insurance>202849.74</Insurance><PhysicalAddress>P.o.Box 124 dodoma</PhysicalAddress><EmailAddress>example@utumishi.go.tz</EmailAddress><MobileNumber>0768383511</MobileNumber><ApplicationNumber>ESS1764845570921</ApplicationNumber><Sex>M</Sex><BankAccountNumber>9120003342458</BankAccountNumber><NearestBranchName>Dar Branch</NearestBranchName><NearestBranchCode>BC012</NearestBranchCode><MaritalStatus>MARRIED</MaritalStatus><ConfirmationDate>2014-03-21</ConfirmationDate><EmploymentDate>2013-03-21</EmploymentDate><TotalEmployeeDeduction>675272.97</TotalEmployeeDeduction><LoanPurpose>UFUGAJI</LoanPurpose><ContractStartDate xsi:nil=\"true\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"/><ContractEndDate xsi:nil=\"true\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"/><SwiftCode>SBICTZTX</SwiftCode><Funding>GF</Funding><LoanNumber>LOAN1763993570520861</LoanNumber><SettlementAmount>11693302.97</SettlementAmount></MessageDetails></Data><Signature>J6l/Bj7ttlsiIKRHD+gdiqY845yEYvWe/S+4X8DoKErajHviOxjYwJlQOp1CyV5iGTMCwp/o/PF+F13QjAhzoOcWgy/Vtz5yNH9H4kTIuPuN5BR+IXVjekxlbKLTbRAS/P8vQWxmB3libL+0Yc+xRaFweERCzP0OFnxIcH26kwjdGIg5f1cHgPm78aaKjvQVK4TprGPj/8U6JvZMePgQc0RuHdct1TQ+rgixExFCs6x32jgsSb2Dpzj4qDL/1NvBeiWNB6gHgPswmJDpxTUwQJfF9S83FYEW2HF+iC3Wu5o4ExpDuSLxTeHVu4A8Ir2hRL4a7VyxxjIy0uyZWZ10bA==</Signature></Document>",
+          "options": {
+            "raw": {
+              "language": "xml"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{base_url}}/api/loan",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "loan"
+          ]
+        },
+        "description": "Send TOP_UP_OFFER_REQUEST for existing loan application ESS1764845570921.\n\n**Key Details:**\n- Application Number: ESS1764845570921\n- Check Number: 110977381\n- Employee: MARRY EDWARD NTIGA\n- Requested Amount: 13,000,000 TZS\n- Existing Loan: LOAN1763993570520861\n- Settlement Amount: 11,693,302.97 TZS\n- Purpose: UFUGAJI (Livestock)\n- Tenure: 96 months\n\n**Expected Response:**\n- Immediate ACK with ResponseCode 8000\n- Delayed callback with LOAN_INITIAL_APPROVAL_NOTIFICATION after 20 seconds"
+      },
+      "response": []
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://135.181.33.13:3002",
+      "type": "string",
+      "description": "Base URL for ESS API"
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Collection-level pre-request script",
+          "console.log('Testing TOP_UP_OFFER_REQUEST for ESS1764845570921');"
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Collection-level test script",
+          "console.log('Response received:', pm.response.status);"
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+<Document>
+  <Data>
+    <Header>
+      <Sender>ZE DONE</Sender>
+      <Receiver>ESS_UTUMISHI</Receiver>
+      <FSPCode>1001</FSPCode>
+      <MsgId>MSGID129</MsgId>
+      <MessageType>PAYMENT_ACKNOWLEDGMENT_NOTIFICATION</MessageType>
+    </Header>
+    <MessageDetails>
+      <PaymentReference>PAY001</PaymentReference>
+      <Amount>5000</Amount>
+      <PaymentDate>2025-11-26</PaymentDate>
+    </MessageDetails>
+  </Data>
+  <Signature>Signature</Signature>
+</Document>

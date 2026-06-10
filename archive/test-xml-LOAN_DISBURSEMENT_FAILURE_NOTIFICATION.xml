@@ -1,0 +1,16 @@
+<Document>
+  <Data>
+    <Header>
+      <Sender>ZE DONE</Sender>
+      <Receiver>ESS_UTUMISHI</Receiver>
+      <FSPCode>1001</FSPCode>
+      <MsgId>MSGID125</MsgId>
+      <MessageType>LOAN_DISBURSEMENT_FAILURE_NOTIFICATION</MessageType>
+    </Header>
+    <MessageDetails>
+      <ApplicationNumber>APP001</ApplicationNumber>
+      <Reason>Insufficient funds</Reason>
+    </MessageDetails>
+  </Data>
+  <Signature>Signature</Signature>
+</Document>

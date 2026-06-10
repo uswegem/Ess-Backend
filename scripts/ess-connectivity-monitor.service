@@ -1,0 +1,36 @@
+# Systemd Service Configuration for Enhanced Connectivity Monitor
+# Save as: /etc/systemd/system/ess-connectivity-monitor.service
+
+[Unit]
+Description=ESS Connectivity Monitor for Utumishi Integration
+Documentation=https://github.com/uswegem/MiraCore_New
+After=network.target ipsec.service
+Wants=network-online.target
+Requires=ipsec.service
+
+[Service]
+Type=simple
+User=uswege
+Group=uswege
+WorkingDirectory=/home/uswege/ess
+Environment=NODE_ENV=production
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+ExecStart=/usr/bin/node /home/uswege/ess/scripts/connectivity-monitor.js start
+ExecStop=/usr/bin/node /home/uswege/ess/scripts/connectivity-monitor.js stop
+Restart=always
+RestartSec=10
+StandardOutput=append:/home/uswege/ess/logs/connectivity-monitor.log
+StandardError=append:/home/uswege/ess/logs/connectivity-monitor-error.log
+
+# Security settings
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ReadWritePaths=/home/uswege/ess/logs
+CapabilityBoundingSet=CAP_NET_RAW
+
+# Allow sudo access for IPSec commands
+SupplementaryGroups=sudo
+
+[Install]
+WantedBy=multi-user.target

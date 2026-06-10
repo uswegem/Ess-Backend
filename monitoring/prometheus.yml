@@ -1,0 +1,36 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  # - "first_rules.yml"
+  # - "second_rules.yml"
+
+scrape_configs:
+  # ESS Application metrics
+  - job_name: 'ess-app'
+    static_configs:
+      - targets: ['135.181.33.13:3002']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+    scrape_timeout: 10s
+
+  # Node.js application metrics
+  - job_name: 'nodejs'
+    static_configs:
+      - targets: ['135.181.33.13:3002']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+
+  # System metrics via Node Exporter (install on your server)
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['135.181.33.13:9100', '5.75.185.137:9100']
+    scrape_interval: 30s
+
+  # PM2 metrics (if PM2 monitoring is enabled)
+  - job_name: 'pm2'
+    static_configs:
+      - targets: ['135.181.33.13:3002']
+    metrics_path: '/pm2/metrics'
+    scrape_interval: 30s

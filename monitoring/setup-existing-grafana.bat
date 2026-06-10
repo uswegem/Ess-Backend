@@ -1,0 +1,50 @@
+@echo off
+echo 🔧 Setting up ESS Monitoring for existing Grafana instance...
+echo 📍 Grafana URL: http://5.75.185.137:3000/
+
+REM Install prom-client for Node.js metrics
+echo 📦 Installing prom-client dependency...
+npm install prom-client
+
+echo 🔧 Setting up metrics endpoint in your ESS application...
+echo.
+echo ✅ Next steps to complete setup:
+echo.
+echo 1. 📊 Add metrics to your ESS server.js:
+echo    Add these lines to your server.js file:
+echo.
+echo    const { httpMetricsMiddleware, metricsHandler, trackLoanMessage } = require('./src/middleware/metricsMiddleware');
+echo    app.use(httpMetricsMiddleware);
+echo    app.get('/metrics', metricsHandler);
+echo.
+echo 2. 🔄 Restart your ESS application:
+echo    pm2 restart ess-app
+echo.
+echo 3. ✅ Verify metrics endpoint is working:
+echo    curl http://135.181.33.13:3002/metrics
+echo.
+echo 4. 📊 Import dashboard to existing Grafana:
+echo    - Open http://5.75.185.137:3000/
+echo    - Go to '+' → 'Import'
+echo    - Upload: monitoring/grafana-dashboard.json
+echo    - Or copy dashboard ID: Copy the JSON content
+echo.
+echo 5. 🎯 Add Prometheus datasource in Grafana:
+echo    - Go to Configuration → Data Sources
+echo    - Add Prometheus datasource
+echo    - URL: http://prometheus:9090 (or your Prometheus URL)
+echo.
+echo 6. 📈 Configure Prometheus to scrape ESS metrics:
+echo    - Add the prometheus.yml configuration to your Prometheus instance
+echo    - Restart Prometheus to pick up new targets
+echo.
+echo 🔍 Test endpoints:
+echo    ESS Metrics: http://135.181.33.13:3002/metrics
+echo    Grafana:     http://5.75.185.137:3000/
+echo.
+echo 📋 Files created:
+echo    - monitoring/grafana-dashboard.json (Dashboard definition)
+echo    - src/middleware/metricsMiddleware.js (Metrics collection)
+echo    - monitoring/prometheus.yml (Prometheus config)
+
+pause

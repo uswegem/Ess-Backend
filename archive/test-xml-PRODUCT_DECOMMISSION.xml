@@ -1,0 +1,16 @@
+<Document>
+  <Data>
+    <Header>
+      <Sender>ZE DONE</Sender>
+      <Receiver>ESS_UTUMISHI</Receiver>
+      <FSPCode>1001</FSPCode>
+      <MsgId>MSGID130</MsgId>
+      <MessageType>PRODUCT_DECOMMISSION</MessageType>
+    </Header>
+    <MessageDetails>
+      <ProductCode>PROD001</ProductCode>
+      <DecommissionDate>2025-11-26</DecommissionDate>
+    </MessageDetails>
+  </Data>
+  <Signature>Signature</Signature>
+</Document>
