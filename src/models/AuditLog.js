@@ -17,7 +17,8 @@ const auditLogSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
     required: function() {
-      return this.action !== 'api_call'; // userId not required for api_call actions
+      // userId optional for api_call and failed login attempts
+      return !['api_call', 'login'].includes(this.action);
     }
   },
   userAgent: {

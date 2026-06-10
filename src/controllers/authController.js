@@ -1,6 +1,7 @@
 const User = require('../models/User');
 const AuditLog = require('../models/AuditLog');
 const JWTUtils = require('../utils/jwtUtils');
+const logger = require('../utils/logger');
 
 class AuthController {
   static async login(req, res) {
