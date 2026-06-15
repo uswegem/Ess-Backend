@@ -5,6 +5,11 @@ let mongoServer;
 
 // Setup before all tests
 beforeAll(async () => {
+  process.env.TENANT_SECRET_ENCRYPTION_KEY = process.env.TENANT_SECRET_ENCRYPTION_KEY || 'd'.repeat(64);
+  process.env.LEGACY_TENANT_ID = process.env.LEGACY_TENANT_ID || 'legacy-zedone';
+  process.env.TENANT_ENFORCEMENT = process.env.TENANT_ENFORCEMENT || 'false';
+  process.env.NODE_ENV = 'test';
+
   // Start in-memory MongoDB server for tests
   mongoServer = await MongoMemoryServer.create();
   const mongoUri = mongoServer.getUri();

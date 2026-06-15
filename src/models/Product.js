@@ -16,6 +16,17 @@ const termsConditionSchema = new mongoose.Schema({
 }, { _id: false });
 
 const productSchema = new mongoose.Schema({
+  tenantId: {
+    type: String,
+    required: false,
+    index: true
+  },
+  tenant: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Tenant',
+    index: true
+  },
+
   // FSP identifiers
   fspCode: {
     type: String,
@@ -27,7 +38,6 @@ const productSchema = new mongoose.Schema({
   productCode: {
     type: String,
     required: true,
-    unique: true,
     index: true
   },
   deductionCode: {
@@ -142,6 +152,10 @@ const productSchema = new mongoose.Schema({
 });
 
 // Index for efficient queries
+productSchema.index({ tenantId: 1, productCode: 1 }, { unique: true, sparse: true });
+productSchema.index({ tenantId: 1, deductionCode: 1 });
+productSchema.index({ tenantId: 1, isActive: 1 });
+productSchema.index({ tenantId: 1, mifosProductId: 1 }, { sparse: true });
 productSchema.index({ isActive: 1 });
 productSchema.index({ deductionCode: 1, productCode: 1 });
 

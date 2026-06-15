@@ -10,6 +10,7 @@ const csv = require('csv-parser');
 const { Readable } = require('stream');
 const Product = require('../models/Product');
 const { authMiddleware, roleMiddleware } = require('../middleware/authMiddleware');
+const { buildTenantQuery } = require('../utils/tenantQuery');
 const logger = require('../utils/logger');
 const { sendCallback } = require('../utils/callbackUtils');
 const { getMessageId } = require('../utils/messageIdGenerator');
@@ -62,7 +63,9 @@ router.get('/', authMiddleware, async (req, res) => {
   try {
     const { active, limit = 100, offset = 0 } = req.query;
     
-    const query = {};
+    const query = req.tenant?.tenantId
+      ? buildTenantQuery(req.tenant.tenantId, {})
+      : {};
     if (active !== undefined) {
       query.isActive = active === 'true';
     }

@@ -1,10 +1,29 @@
 const mongoose = require('mongoose');
 
 const messageLogSchema = new mongoose.Schema({
+  tenantId: {
+    type: String,
+    required: false,
+    index: true
+  },
+  tenant: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Tenant',
+    index: true
+  },
+  fspCode: {
+    type: String,
+    uppercase: true,
+    trim: true,
+    index: true
+  },
+  correlationId: {
+    type: String,
+    index: true
+  },
   messageId: {
     type: String,
-    required: true,
-    unique: true
+    required: true
   },
   messageType: {
     type: String,
@@ -96,11 +115,15 @@ const messageLogSchema = new mongoose.Schema({
 });
 
 // Indexes for better query performance
+messageLogSchema.index({ tenantId: 1, messageId: 1 }, { unique: true, sparse: true });
+messageLogSchema.index({ tenantId: 1, messageType: 1, createdAt: -1 });
+messageLogSchema.index({ tenantId: 1, status: 1, createdAt: -1 });
+messageLogSchema.index({ tenantId: 1, applicationNumber: 1 });
+messageLogSchema.index({ tenantId: 1, loanNumber: 1 });
+messageLogSchema.index({ tenantId: 1, fspReferenceNumber: 1 });
 messageLogSchema.index({ messageType: 1 });
 messageLogSchema.index({ status: 1 });
 messageLogSchema.index({ createdAt: -1 });
-messageLogSchema.index({ applicationNumber: 1 });
-messageLogSchema.index({ loanNumber: 1 });
 messageLogSchema.index({ messageId: 1 });
 
 module.exports = mongoose.model('MessageLog', messageLogSchema);

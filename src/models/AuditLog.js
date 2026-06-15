@@ -1,6 +1,28 @@
 const mongoose = require('mongoose');
 
 const auditLogSchema = new mongoose.Schema({
+  tenantId: {
+    type: String,
+    index: true
+  },
+  tenant: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Tenant',
+    index: true
+  },
+  actorType: {
+    type: String,
+    enum: ['user', 'api_key', 'system'],
+    default: 'user'
+  },
+  apiKeyId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'ApiKey'
+  },
+  correlationId: {
+    type: String,
+    index: true
+  },
   action: {
     type: String,
     required: true,
@@ -47,6 +69,10 @@ const auditLogSchema = new mongoose.Schema({
 });
 
 // Index for better query performance
+auditLogSchema.index({ tenantId: 1, createdAt: -1 });
+auditLogSchema.index({ tenantId: 1, action: 1, createdAt: -1 });
+auditLogSchema.index({ tenantId: 1, userId: 1, createdAt: -1 });
+auditLogSchema.index({ actorType: 1, createdAt: -1 });
 auditLogSchema.index({ userId: 1, createdAt: -1 });
 auditLogSchema.index({ action: 1 });
 auditLogSchema.index({ createdAt: -1 });

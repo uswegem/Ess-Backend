@@ -1,6 +1,17 @@
 const mongoose = require('mongoose');
 
 const loanMappingSchema = new mongoose.Schema({
+  tenantId: {
+    type: String,
+    required: false,
+    index: true
+  },
+  tenant: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Tenant',
+    index: true
+  },
+
   // ESS identifiers
   essApplicationNumber: {
     type: String,
@@ -154,8 +165,15 @@ const loanMappingSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Compound indexes for efficient lookups
-loanMappingSchema.index({ essApplicationNumber: 1, essLoanNumber: 1 });
+// Compound indexes for efficient lookups (tenant-scoped)
+loanMappingSchema.index({ tenantId: 1, essApplicationNumber: 1 }, { unique: true, sparse: true });
+loanMappingSchema.index({ tenantId: 1, essCheckNumber: 1 });
+loanMappingSchema.index({ tenantId: 1, essLoanNumberAlias: 1 });
+loanMappingSchema.index({ tenantId: 1, fspReferenceNumber: 1 }, { sparse: true });
+loanMappingSchema.index({ tenantId: 1, mifosLoanId: 1 }, { sparse: true });
+loanMappingSchema.index({ tenantId: 1, status: 1, createdAt: -1 });
+loanMappingSchema.index({ tenantId: 1, originalMessageType: 1, createdAt: -1 });
+loanMappingSchema.index({ essApplicationNumber: 1, essLoanNumberAlias: 1 });
 loanMappingSchema.index({ status: 1 });
 
 // Additional compound indexes for optimized queries
@@ -204,16 +222,22 @@ loanMappingSchema.methods.addError = function(stage, error) {
 };
 
 // Static methods (return lean queries for read-only operations)
-loanMappingSchema.statics.findByEssLoanNumber = function(essLoanNumber) {
-  return this.findOne({ essLoanNumber });
+loanMappingSchema.statics.findByEssLoanNumber = function(tenantId, essLoanNumberAlias) {
+  const query = { essLoanNumberAlias };
+  if (tenantId) query.tenantId = tenantId;
+  return this.findOne(query);
 };
 
-loanMappingSchema.statics.findByFspReference = function(fspReferenceNumber) {
-  return this.findOne({ fspReferenceNumber });
+loanMappingSchema.statics.findByFspReference = function(tenantId, fspReferenceNumber) {
+  const query = { fspReferenceNumber };
+  if (tenantId) query.tenantId = tenantId;
+  return this.findOne(query);
 };
 
-loanMappingSchema.statics.findByMifosLoanId = function(mifosLoanId) {
-  return this.findOne({ mifosLoanId });
+loanMappingSchema.statics.findByMifosLoanId = function(tenantId, mifosLoanId) {
+  const query = { mifosLoanId };
+  if (tenantId) query.tenantId = tenantId;
+  return this.findOne(query);
 };
 
 // Compound indexes for common query patterns

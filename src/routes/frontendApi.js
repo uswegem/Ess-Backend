@@ -576,10 +576,12 @@ router.get('/loan/records', async (req, res) => {
   try {
     const LoanMapping = require('../models/LoanMapping');
     
+    const { buildTenantQuery } = require('../utils/tenantQuery');
     const { status, limit = 1000, offset = 0, format = 'json' } = req.query;
     
-    // Build query
-    const query = {};
+    const query = req.tenant?.tenantId
+      ? buildTenantQuery(req.tenant.tenantId, {})
+      : {};
     if (status) {
       query.status = status;
     }

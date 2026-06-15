@@ -2,6 +2,7 @@ const logger = require('../utils/logger');
 const MessageLog = require('../models/MessageLog');
 const { forwardToThirdParty } = require('../services/thirdPartyService');
 const digitalSignature = require('../utils/signatureUtils');
+const { buildTenantQuery } = require('../utils/tenantQuery');
 
 class MessageController {
   static async getMessageLogs(req, res) {
@@ -21,6 +22,9 @@ class MessageController {
       } = req.query;
 
       let filter = { direction };
+      if (req.tenant?.tenantId) {
+        filter = buildTenantQuery(req.tenant.tenantId, filter);
+      }
 
       if (messageType) filter.messageType = messageType;
       if (status) filter.status = status;

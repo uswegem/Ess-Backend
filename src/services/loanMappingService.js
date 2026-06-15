@@ -3,8 +3,21 @@ const LoanMapping = require('../models/LoanMapping');
 const ClientService = require('./clientService');
 const DBTransaction = require('../utils/dbTransaction');
 const healthMonitor = require('../utils/loanMappingHealthMonitor');
+const { buildTenantQuery } = require('../utils/tenantQuery');
 
 class LoanMappingService {
+  static scopeFilter(filter = {}, tenantId = null) {
+    return tenantId ? buildTenantQuery(tenantId, filter) : filter;
+  }
+
+  static applyWriteScope(data = {}, tenantId = null, tenantObjectId = null) {
+    if (!tenantId) return data;
+    return {
+      ...data,
+      tenantId,
+      ...(tenantObjectId ? { tenant: tenantObjectId } : {})
+    };
+  }
   /**
    * Generate loan number alias in format: YYYYMMDDHHMM + 3 unique numbers
    */
@@ -25,15 +38,14 @@ class LoanMappingService {
   /**
    * Create or update loan mapping with client data from LOAN_OFFER_REQUEST
    */
-  static async createOrUpdateWithClientData(applicationNumber, checkNumber, clientData, loanData, employmentData, originalMessageType = null) {
+  static async createOrUpdateWithClientData(applicationNumber, checkNumber, clientData, loanData, employmentData, originalMessageType = null, tenantId = null, tenantObjectId = null) {
     try {
-      // Only update active mappings, not CANCELLED or REJECTED ones
-      const filter = {
+      const filter = this.scopeFilter({
         essApplicationNumber: applicationNumber,
-        status: { $nin: ['CANCELLED', 'REJECTED'] } // Exclude inactive statuses
-      };
+        status: { $nin: ['CANCELLED', 'REJECTED'] }
+      }, tenantId);
 
-      const update = {
+      const update = this.applyWriteScope({
         essApplicationNumber: applicationNumber,
         essCheckNumber: checkNumber,
         productCode: loanData.productCode || "17",
@@ -49,7 +61,7 @@ class LoanMappingService {
           updatedVia: 'createOrUpdateWithClientData'
         },
         updatedAt: new Date()
-      };
+      }, tenantId, tenantObjectId);
 
       const options = {
         new: true,
@@ -368,9 +380,9 @@ class LoanMappingService {
   /**
    * Get loan mapping by ESS loan number alias
    */
-  static async getByEssLoanNumberAlias(essLoanNumberAlias) {
+  static async getByEssLoanNumberAlias(essLoanNumberAlias, tenantId = null) {
     try {
-      const mapping = await LoanMapping.findOne({ essLoanNumberAlias }).lean();
+      const mapping = await LoanMapping.findOne(this.scopeFilter({ essLoanNumberAlias }, tenantId)).lean();
       if (!mapping) {
         throw new Error(`No loan mapping found for ESS loan alias: ${essLoanNumberAlias}`);
       }
@@ -386,14 +398,14 @@ class LoanMappingService {
    * @param {string} essApplicationNumber - The ESS application number
    * @param {boolean} includeInactive - Whether to include CANCELLED/REJECTED loans (default: true)
    */
-  static async getByEssApplicationNumber(essApplicationNumber, includeInactive = true) {
+  static async getByEssApplicationNumber(essApplicationNumber, includeInactive = true, tenantId = null) {
     try {
-      const query = {
+      const query = this.scopeFilter({
         $or: [
           { essApplicationNumber },
-          { restructureApplicationNumber: essApplicationNumber } // Also search by restructure application number
+          { restructureApplicationNumber: essApplicationNumber }
         ]
-      };
+      }, tenantId);
       
       // Optionally exclude inactive statuses
       if (!includeInactive) {
@@ -414,9 +426,9 @@ class LoanMappingService {
   /**
    * Get loan mapping by FSP reference number
    */
-  static async getByFspReference(fspReferenceNumber) {
+  static async getByFspReference(fspReferenceNumber, tenantId = null) {
     try {
-      const mapping = await LoanMapping.findByFspReference(fspReferenceNumber).lean();
+      const mapping = await LoanMapping.findOne(this.scopeFilter({ fspReferenceNumber }, tenantId)).lean();
       if (!mapping) {
         throw new Error(`No loan mapping found for FSP reference: ${fspReferenceNumber}`);
       }
@@ -430,9 +442,9 @@ class LoanMappingService {
   /**
    * Get loan mapping by MIFOS loan ID
    */
-  static async getByMifosLoanId(mifosLoanId) {
+  static async getByMifosLoanId(mifosLoanId, tenantId = null) {
     try {
-      const mapping = await LoanMapping.findByMifosLoanId(mifosLoanId).lean();
+      const mapping = await LoanMapping.findOne(this.scopeFilter({ mifosLoanId }, tenantId)).lean();
       if (!mapping) {
         throw new Error(`No loan mapping found for MIFOS loan ID: ${mifosLoanId}`);
       }
@@ -498,7 +510,7 @@ class LoanMappingService {
   /**
    * Update loan mapping status with additional metadata
    */
-  static async updateStatus(essApplicationNumber, newStatus, additionalData = {}) {
+  static async updateStatus(essApplicationNumber, newStatus, additionalData = {}, tenantId = null) {
     try {
       const update = {
         status: newStatus,
@@ -506,9 +518,8 @@ class LoanMappingService {
         ...additionalData
       };
 
-      // If metadata is provided, merge it with existing metadata
       if (additionalData.metadata) {
-        const existing = await LoanMapping.findOne({ essApplicationNumber });
+        const existing = await LoanMapping.findOne(this.scopeFilter({ essApplicationNumber }, tenantId));
         if (existing && existing.metadata) {
           update.metadata = {
             ...existing.metadata,
@@ -518,7 +529,7 @@ class LoanMappingService {
       }
 
       const mapping = await LoanMapping.findOneAndUpdate(
-        { essApplicationNumber },
+        this.scopeFilter({ essApplicationNumber }, tenantId),
         update,
         { new: true }
       );
@@ -549,11 +560,11 @@ class LoanMappingService {
         startDate,
         endDate,
         sort = 'createdAt',
-        order = 'desc'
+        order = 'desc',
+        tenantId = null
       } = params;
 
-      // Build query filter
-      const filter = {};
+      const filter = this.scopeFilter({}, tenantId);
       
       if (status && status !== '') {
         filter.status = status;

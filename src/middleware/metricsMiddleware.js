@@ -87,10 +87,27 @@ const logLevelTotal = new promClient.Counter({
     registers: [register]
 });
 
+const tenantRequestsTotal = new promClient.Counter({
+    name: 'tenant_requests_total',
+    help: 'Total HTTP requests by tenant',
+    labelNames: ['tenant_id', 'method', 'status_code'],
+    registers: [register]
+});
+
 // Note: Metrics are automatically registered when using the 'registers' option
 
 // Middleware to track HTTP requests
 const httpMetricsMiddleware = (req, res, next) => {
+    res.on('finish', () => {
+        const tenantId = req.tenant?.tenantId || 'unscoped';
+        try {
+            tenantRequestsTotal
+                .labels(tenantId, req.method, String(res.statusCode))
+                .inc();
+        } catch (error) {
+            logger.error('Error tracking tenant request metric:', { error: error.message });
+        }
+    });
     next();
 };
 

@@ -43,24 +43,10 @@ const apiController = require('../controllers/apiController');
  */
 // Public routes
 router.post('/login', AuthController.login);
+router.post('/login-with-api-key', AuthController.loginWithApiKey);
 
-/**
- * @swagger
- * /api/v1/auth/profile:
- *   get:
- *     summary: Get user profile
- *     description: Retrieve authenticated user's profile information
- *     tags:
- *       - Authentication
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: Profile retrieved successfully
- *       401:
- *         description: Unauthorized
- */
 // Protected routes
+router.post('/select-tenant', authMiddleware, AuthController.selectTenant);
 router.get('/profile', authMiddleware, AuthController.getProfile);
 
 /**

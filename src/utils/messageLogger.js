@@ -1,6 +1,7 @@
 const logger = require('./logger');
 const MessageLog = require('../models/MessageLog');
 const { getMessageId } = require('./messageIdGenerator');
+const { buildTenantQuery } = require('./tenantQuery');
 
 /**
  * Logs an outgoing message to the MessageLog collection
@@ -20,10 +21,14 @@ async function logOutgoingMessage(xmlPayload, messageType, metadata = {}, userId
       applicationNumber,
       loanNumber,
       fspReferenceNumber,
+      tenantId,
+      tenantObjectId,
+      fspCode,
+      correlationId,
       ...otherMetadata
     } = metadata;
 
-    const messageLog = new MessageLog({
+    const baseDoc = {
       messageId,
       messageType,
       direction: 'outgoing',
@@ -33,8 +38,17 @@ async function logOutgoingMessage(xmlPayload, messageType, metadata = {}, userId
       loanNumber,
       fspReferenceNumber,
       sentBy: userId,
+      fspCode,
+      correlationId,
       metadata: otherMetadata
-    });
+    };
+
+    if (tenantId) {
+      baseDoc.tenantId = tenantId;
+      if (tenantObjectId) baseDoc.tenant = tenantObjectId;
+    }
+
+    const messageLog = new MessageLog(baseDoc);
 
     await messageLog.save();
     logger.info(`Logged outgoing message: ${messageId} (${messageType})`);
@@ -54,7 +68,7 @@ async function logOutgoingMessage(xmlPayload, messageType, metadata = {}, userId
  * @param {string|Object} response - The response from the third party
  * @param {string} errorMessage - Error message if failed
  */
-async function updateMessageLog(messageId, status, response = null, errorMessage = null) {
+async function updateMessageLog(messageId, status, response = null, errorMessage = null, tenantId = null) {
   try {
     const updateData = {
       status,
@@ -69,10 +83,9 @@ async function updateMessageLog(messageId, status, response = null, errorMessage
       updateData.errorMessage = errorMessage;
     }
 
-    await MessageLog.findOneAndUpdate(
-      { messageId },
-      updateData
-    );
+    const filter = tenantId ? buildTenantQuery(tenantId, { messageId }) : { messageId };
+
+    await MessageLog.findOneAndUpdate(filter, updateData);
 
     logger.info(`Updated message log ${messageId} with status: ${status}`);
   } catch (error) {

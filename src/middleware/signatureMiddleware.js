@@ -1,7 +1,26 @@
 const logger = require('../utils/logger');
 const digitalSignature = require('../utils/signatureUtils');
 
+function extractFspCodeFromXml(body) {
+  if (!body || typeof body !== 'string') return null;
+  const match = body.match(/<FSPCode>(.*?)<\/FSPCode>/i);
+  return match ? match[1].trim().toUpperCase() : null;
+}
+
 function verifySignatureMiddleware(req, res, next) {
+  const payloadFspCode = extractFspCodeFromXml(req.body);
+  if (payloadFspCode && req.tenant?.fspCode && payloadFspCode !== req.tenant.fspCode) {
+    logger.warn('FSPCode mismatch rejected', {
+      payloadFspCode,
+      tenantFspCode: req.tenant.fspCode,
+      path: req.path
+    });
+    return res.status(403).json({
+      success: false,
+      message: 'FSPCode does not match authenticated tenant'
+    });
+  }
+
   logger.info('⚠️ TESTING MODE: Signature validation is disabled');
   logger.info('Request path:', req.path);
   

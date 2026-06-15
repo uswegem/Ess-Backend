@@ -18,7 +18,11 @@ router.post('/auth/logout', authMiddleware, AuthController.logout);
 router.get('/loan/list-products', authMiddleware, async (req, res) => {
     try {
         const Product = require('../models/Product');
-        const products = await Product.find({ isActive: true })
+        const { buildTenantQuery } = require('../utils/tenantQuery');
+        const productQuery = req.tenant?.tenantId
+          ? buildTenantQuery(req.tenant.tenantId, { isActive: true })
+          : { isActive: true };
+        const products = await Product.find(productQuery)
             .select({
                 _id: 1,
                 productCode: 1,
@@ -82,7 +86,9 @@ router.get('/loan/list-products', authMiddleware, async (req, res) => {
 
 router.get('/loan/list-employee-loan', authMiddleware, async (req, res) => {
     try {
-        const loans = await LoanMappingService.getAllWithDetails();
+        const loans = await LoanMappingService.getAllWithDetails({
+          tenantId: req.tenant?.tenantId || null
+        });
         res.json({
             success: true,
             data: { loans }

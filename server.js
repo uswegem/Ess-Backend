@@ -35,6 +35,8 @@ const frontendApiRoutes = require('./src/routes/frontendApi');
 // Import middleware
 const { verifySignatureMiddleware } = require('./src/middleware/signatureMiddleware');
 const { auditMiddleware } = require('./src/middleware/authMiddleware');
+const { attachTenantToRequest } = require('./src/middleware/tenantMiddleware');
+const { tenantValidator } = require('./src/middleware/tenantValidator');
 const { httpMetricsMiddleware, metricsHandler, trackLoanMessage, trackLoanError } = require('./src/middleware/metricsMiddleware');
 
 // Import database
@@ -208,7 +210,11 @@ app.use((req, res, next) => {
     next();
 });
 
-// 6. Audit middleware for all routes
+// 6. Tenant context middleware (before protected routes)
+app.use(attachTenantToRequest);
+app.use(tenantValidator);
+
+// 7. Audit middleware for all routes
 app.use(auditMiddleware);
 
 // ========== ROUTES ==========

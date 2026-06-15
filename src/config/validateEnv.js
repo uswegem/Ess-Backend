@@ -30,7 +30,10 @@ const optionalEnvVars = [
   'JWT_EXPIRES_IN',
   'REDIS_URL',
   'IPSEC_TUNNEL_INTERFACE',
-  'STRONGSWAN_CONF_PATH'
+  'STRONGSWAN_CONF_PATH',
+  'TENANT_SECRET_ENCRYPTION_KEY',
+  'LEGACY_TENANT_ID',
+  'TENANT_ENFORCEMENT'
 ];
 
 /**
@@ -109,6 +112,18 @@ function validateEnvPatterns() {
   });
   
   logger.info('✅ Environment pattern validation complete');
+
+  if (process.env.NODE_ENV !== 'test' && !process.env.TENANT_SECRET_ENCRYPTION_KEY) {
+    logger.warn('⚠️ TENANT_SECRET_ENCRYPTION_KEY is not set — tenant secret encryption will be unavailable');
+  }
+
+  if (!process.env.LEGACY_TENANT_ID) {
+    process.env.LEGACY_TENANT_ID = 'legacy-zedone';
+  }
+
+  if (process.env.TENANT_ENFORCEMENT === undefined) {
+    process.env.TENANT_ENFORCEMENT = process.env.NODE_ENV === 'production' ? 'true' : 'false';
+  }
 }
 
 /**
@@ -122,6 +137,8 @@ function logEnvironmentConfig() {
     fspCode: process.env.FSP_CODE,
     cbsTenant: process.env.CBS_Tenant,
     logLevel: process.env.LOG_LEVEL || 'info',
+    legacyTenantId: process.env.LEGACY_TENANT_ID || 'legacy-zedone',
+    tenantEnforcement: process.env.TENANT_ENFORCEMENT || 'false',
     // Never log sensitive values like passwords, secrets, or keys
   });
 }
