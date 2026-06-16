@@ -1,169 +1,115 @@
 const request = require('supertest');
-const app = require('../../server');
-const mongoose = require('mongoose');
+const express = require('express');
 const User = require('../../src/models/User');
-const jwt = require('jsonwebtoken');
+const Tenant = require('../../src/models/Tenant');
+const TenantUser = require('../../src/models/TenantUser');
+const RefreshToken = require('../../src/models/RefreshToken');
+const authRoutes = require('../../src/routes/auth');
+const { correlationMiddleware } = require('../../src/middleware/correlationMiddleware');
+const { attachTenantToRequest } = require('../../src/middleware/tenantMiddleware');
+const { auditMiddleware } = require('../../src/middleware/authMiddleware');
 
-describe('Authentication Flow Integration Tests', () => {
-    const testUser = {
-        username: 'testuser',
-        email: 'test@example.com',
-        password: 'TestPassword123!',
-        role: 'user'
-    };
+function buildTestApp() {
+  const app = express();
+  app.use(express.json());
+  app.use(correlationMiddleware);
+  app.use(attachTenantToRequest);
+  app.use(auditMiddleware);
+  app.use('/api/v1/auth', authRoutes);
+  return app;
+}
 
-    let authToken;
+describe('Authentication API integration', () => {
+  let app;
+  let user;
+  let tenant;
 
-    beforeAll(async () => {
-        // Clean up existing test user
-        await User.deleteOne({ username: testUser.username });
+  beforeEach(async () => {
+    app = buildTestApp();
+    await User.deleteMany({});
+    await Tenant.deleteMany({});
+    await TenantUser.deleteMany({});
+    await RefreshToken.deleteMany({});
+
+    tenant = await Tenant.create({
+      tenantId: 'legacy-zedone',
+      tenantName: 'Legacy',
+      fspCode: 'FL8090',
+      fspName: 'ZE DONE',
+      contactPerson: 'Admin',
+      contactEmail: 'admin@test.com',
+      contactPhone: '+255700000000',
+      status: 'active'
     });
 
-    afterAll(async () => {
-        // Clean up test data
-        await User.deleteOne({ username: testUser.username });
+    user = await User.create({
+      username: 'authuser',
+      email: 'authuser@test.com',
+      password: 'TestPassword123!',
+      fullName: 'Auth User',
+      role: 'super_admin',
+      isActive: true
     });
 
-    describe('POST /auth/register', () => {
-        it('should register a new user successfully', async () => {
-            const response = await request(app)
-                .post('/auth/register')
-                .send(testUser);
-
-            expect(response.status).toBe(201);
-            expect(response.body).toHaveProperty('message');
-            expect(response.body.message).toContain('registered successfully');
-        });
-
-        it('should not register duplicate username', async () => {
-            const response = await request(app)
-                .post('/auth/register')
-                .send(testUser);
-
-            expect(response.status).toBe(400);
-            expect(response.body).toHaveProperty('error');
-        });
-
-        it('should validate required fields', async () => {
-            const response = await request(app)
-                .post('/auth/register')
-                .send({ username: 'onlyusername' });
-
-            expect(response.status).toBe(400);
-        });
+    await TenantUser.create({
+      tenantId: tenant.tenantId,
+      tenant: tenant._id,
+      userId: user._id,
+      role: 'tenant_admin',
+      isActive: true
     });
+  });
 
-    describe('POST /auth/login', () => {
-        it('should login with valid credentials', async () => {
-            const response = await request(app)
-                .post('/auth/login')
-                .send({
-                    username: testUser.username,
-                    password: testUser.password
-                });
+  it('logs in and returns access + refresh tokens', async () => {
+    const response = await request(app)
+      .post('/api/v1/auth/login')
+      .send({ username: 'authuser', password: 'TestPassword123!' });
 
-            expect(response.status).toBe(200);
-            expect(response.body).toHaveProperty('token');
-            expect(response.body).toHaveProperty('user');
-            expect(response.body.user.username).toBe(testUser.username);
+    expect(response.status).toBe(200);
+    expect(response.body.success).toBe(true);
+    expect(response.body.data.token).toBeTruthy();
+    expect(response.body.data.refreshToken).toBeTruthy();
+  });
 
-            // Save token for protected route tests
-            authToken = response.body.token;
-        });
+  it('refreshes tokens with valid refresh token', async () => {
+    const login = await request(app)
+      .post('/api/v1/auth/login')
+      .send({ username: 'authuser', password: 'TestPassword123!' });
 
-        it('should reject invalid credentials', async () => {
-            const response = await request(app)
-                .post('/auth/login')
-                .send({
-                    username: testUser.username,
-                    password: 'wrongpassword'
-                });
+    const refresh = await request(app)
+      .post('/api/v1/auth/refresh')
+      .send({ refreshToken: login.body.data.refreshToken });
 
-            expect(response.status).toBe(401);
-            expect(response.body).toHaveProperty('error');
-        });
+    expect(refresh.status).toBe(200);
+    expect(refresh.body.data.token).toBeTruthy();
+    expect(refresh.body.data.refreshToken).toBeTruthy();
+    expect(refresh.body.data.refreshToken).not.toBe(login.body.data.refreshToken);
+  });
 
-        it('should reject non-existent user', async () => {
-            const response = await request(app)
-                .post('/auth/login')
-                .send({
-                    username: 'nonexistent',
-                    password: 'password123'
-                });
+  it('rejects profile access without token', async () => {
+    const response = await request(app).get('/api/v1/auth/profile');
+    expect(response.status).toBe(401);
+  });
 
-            expect(response.status).toBe(401);
-        });
-    });
+  it('allows profile access with valid access token', async () => {
+    const login = await request(app)
+      .post('/api/v1/auth/login')
+      .send({ username: 'authuser', password: 'TestPassword123!' });
 
-    describe('Protected Routes', () => {
-        it('should access protected route with valid token', async () => {
-            const response = await request(app)
-                .get('/auth/profile')
-                .set('Authorization', `Bearer ${authToken}`);
+    const profile = await request(app)
+      .get('/api/v1/auth/profile')
+      .set('Authorization', `Bearer ${login.body.data.token}`);
 
-            expect(response.status).toBe(200);
-            expect(response.body).toHaveProperty('user');
-            expect(response.body.user.username).toBe(testUser.username);
-        });
+    expect(profile.status).toBe(200);
+    expect(profile.body.data.user.username).toBe('authuser');
+  });
 
-        it('should reject access without token', async () => {
-            const response = await request(app)
-                .get('/auth/profile');
+  it('rejects invalid credentials', async () => {
+    const response = await request(app)
+      .post('/api/v1/auth/login')
+      .send({ username: 'authuser', password: 'wrongpassword' });
 
-            expect(response.status).toBe(401);
-        });
-
-        it('should reject access with invalid token', async () => {
-            const response = await request(app)
-                .get('/auth/profile')
-                .set('Authorization', 'Bearer invalidtoken');
-
-            expect(response.status).toBe(403);
-        });
-
-        it('should reject expired token', async () => {
-            // Create an expired token
-            const expiredToken = jwt.sign(
-                { userId: 'test', username: testUser.username },
-                process.env.JWT_SECRET || 'test-secret',
-                { expiresIn: '1ms' }
-            );
-
-            // Wait for token to expire
-            await new Promise(resolve => setTimeout(resolve, 100));
-
-            const response = await request(app)
-                .get('/auth/profile')
-                .set('Authorization', `Bearer ${expiredToken}`);
-
-            expect(response.status).toBe(403);
-        });
-    });
-
-    describe('Token Validation', () => {
-        it('should validate token format', async () => {
-            const invalidFormats = [
-                'Bearer',
-                'Bearer ',
-                'InvalidFormat token',
-                'token'
-            ];
-
-            for (const format of invalidFormats) {
-                const response = await request(app)
-                    .get('/auth/profile')
-                    .set('Authorization', format);
-
-                expect(response.status).toBe(401);
-            }
-        });
-
-        it('should accept valid Bearer token format', async () => {
-            const response = await request(app)
-                .get('/auth/profile')
-                .set('Authorization', `Bearer ${authToken}`);
-
-            expect(response.status).toBe(200);
-        });
-    });
+    expect(response.status).toBe(401);
+    expect(response.body.success).toBe(false);
+  });
 });

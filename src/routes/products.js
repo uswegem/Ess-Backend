@@ -9,8 +9,8 @@ const multer = require('multer');
 const csv = require('csv-parser');
 const { Readable } = require('stream');
 const Product = require('../models/Product');
-const { authMiddleware, roleMiddleware } = require('../middleware/authMiddleware');
-const { buildTenantQuery } = require('../utils/tenantQuery');
+const { authMiddleware, roleMiddleware, permissionMiddleware } = require('../middleware/authMiddleware');
+const { buildTenantQuery, buildTenantListQuery } = require('../utils/tenantQuery');
 const logger = require('../utils/logger');
 const { sendCallback } = require('../utils/callbackUtils');
 const { getMessageId } = require('../utils/messageIdGenerator');
@@ -55,6 +55,25 @@ const parseCSVBuffer = (buffer) => {
   });
 };
 
+function scopedListQuery(req, baseQuery = {}) {
+  return req.tenant?.tenantId
+    ? buildTenantListQuery(req.tenant.tenantId, baseQuery)
+    : baseQuery;
+}
+
+function scopedItemQuery(req, id) {
+  const base = { _id: id };
+  return req.tenant?.tenantId
+    ? buildTenantQuery(req.tenant.tenantId, base)
+    : base;
+}
+
+const productWriteGuards = [
+  authMiddleware,
+  roleMiddleware(['super_admin', 'admin', 'tenant_admin']),
+  permissionMiddleware('tenant:update')
+];
+
 /**
  * GET /api/v1/products
  * List all products
@@ -63,9 +82,7 @@ router.get('/', authMiddleware, async (req, res) => {
   try {
     const { active, limit = 100, offset = 0 } = req.query;
     
-    const query = req.tenant?.tenantId
-      ? buildTenantQuery(req.tenant.tenantId, {})
-      : {};
+    const query = scopedListQuery(req, {});
     if (active !== undefined) {
       query.isActive = active === 'true';
     }
@@ -99,7 +116,7 @@ router.get('/', authMiddleware, async (req, res) => {
  */
 router.get('/:id', authMiddleware, async (req, res) => {
   try {
-    const product = await Product.findById(req.params.id).lean();
+    const product = await Product.findOne(scopedItemQuery(req, req.params.id)).lean();
     
     if (!product) {
       return res.status(404).json({ success: false, message: 'Product not found' });
@@ -116,7 +133,7 @@ router.get('/:id', authMiddleware, async (req, res) => {
  * POST /api/v1/products
  * Create a new product
  */
-router.post('/', authMiddleware, roleMiddleware(['super_admin', 'admin']), async (req, res) => {
+router.post('/', ...productWriteGuards, async (req, res) => {
   try {
     const {
       productCode,
@@ -140,7 +157,10 @@ router.post('/', authMiddleware, roleMiddleware(['super_admin', 'admin']), async
     } = req.body;
     
     // Check if product code already exists
-    const existing = await Product.findOne({ productCode });
+    const existingQuery = req.tenant?.tenantId
+      ? buildTenantQuery(req.tenant.tenantId, { productCode })
+      : { productCode };
+    const existing = await Product.findOne(existingQuery);
     if (existing) {
       return res.status(400).json({ 
         success: false, 
@@ -168,7 +188,11 @@ router.post('/', authMiddleware, roleMiddleware(['super_admin', 'admin']), async
       termsConditions: termsConditions || [],
       mifosProductId,
       createdBy: req.user?.userId,
-      fspCode: process.env.FSP_CODE || 'FL8090'
+      fspCode: process.env.FSP_CODE || 'FL8090',
+      ...(req.tenant?.tenantId && {
+        tenantId: req.tenant.tenantId,
+        tenant: req.tenant.tenantObjectId
+      })
     });
     
     await product.save();
@@ -190,13 +214,13 @@ router.post('/', authMiddleware, roleMiddleware(['super_admin', 'admin']), async
  * PUT /api/v1/products/:id
  * Update a product
  */
-router.put('/:id', authMiddleware, roleMiddleware(['super_admin', 'admin']), async (req, res) => {
+router.put('/:id', ...productWriteGuards, async (req, res) => {
   try {
     const updates = req.body;
     updates.updatedBy = req.user?.userId;
     
-    const product = await Product.findByIdAndUpdate(
-      req.params.id,
+    const product = await Product.findOneAndUpdate(
+      scopedItemQuery(req, req.params.id),
       { $set: updates },
       { new: true, runValidators: true }
     );
@@ -222,10 +246,10 @@ router.put('/:id', authMiddleware, roleMiddleware(['super_admin', 'admin']), asy
  * DELETE /api/v1/products/:id
  * Delete a product (soft delete - sets isActive to false)
  */
-router.delete('/:id', authMiddleware, roleMiddleware(['super_admin', 'admin']), async (req, res) => {
+router.delete('/:id', ...productWriteGuards, async (req, res) => {
   try {
-    const product = await Product.findByIdAndUpdate(
-      req.params.id,
+    const product = await Product.findOneAndUpdate(
+      scopedItemQuery(req, req.params.id),
       { $set: { isActive: false, updatedBy: req.user?.userId } },
       { new: true }
     );
@@ -255,13 +279,13 @@ router.delete('/:id', authMiddleware, roleMiddleware(['super_admin', 'admin']), 
  * TC001,Payment must be made in full,2024-02-22
  * TC002,Loan must be paid within time,2024-02-22
  */
-router.post('/:id/terms-csv', authMiddleware, roleMiddleware(['super_admin', 'admin']), upload.single('file'), async (req, res) => {
+router.post('/:id/terms-csv', ...productWriteGuards, upload.single('file'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ success: false, message: 'No CSV file uploaded' });
     }
     
-    const product = await Product.findById(req.params.id);
+    const product = await Product.findOne(scopedItemQuery(req, req.params.id));
     if (!product) {
       return res.status(404).json({ success: false, message: 'Product not found' });
     }
@@ -323,9 +347,9 @@ TC003,Early repayment is allowed without penalty,${new Date().toISOString().spli
  * POST /api/v1/products/sync-to-utumishi
  * Send PRODUCT_DETAIL message to Utumishi with all active products
  */
-router.post('/sync-to-utumishi', authMiddleware, roleMiddleware(['super_admin', 'admin']), async (req, res) => {
+router.post('/sync-to-utumishi', ...productWriteGuards, async (req, res) => {
   try {
-    const products = await Product.find({ isActive: true });
+    const products = await Product.find(scopedListQuery(req, { isActive: true }));
     
     if (products.length === 0) {
       return res.status(400).json({ success: false, message: 'No active products to sync' });
@@ -352,7 +376,7 @@ router.post('/sync-to-utumishi', authMiddleware, roleMiddleware(['super_admin', 
     
     // Update sync timestamp
     await Product.updateMany(
-      { isActive: true },
+      scopedListQuery(req, { isActive: true }),
       { $set: { lastSyncedToUtumishi: new Date() } }
     );
     
@@ -379,7 +403,7 @@ router.post('/sync-to-utumishi', authMiddleware, roleMiddleware(['super_admin', 
  * CSV Format:
  * productCode,deductionCode,productName,productDescription,minTenure,maxTenure,interestRate,processingFee,insurance,minAmount,maxAmount,repaymentType,insuranceType,forExecutive,shariaFacility
  */
-router.post('/import-csv', authMiddleware, roleMiddleware(['super_admin', 'admin']), upload.single('file'), async (req, res) => {
+router.post('/import-csv', ...productWriteGuards, upload.single('file'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ success: false, message: 'No CSV file uploaded' });
@@ -410,7 +434,11 @@ router.post('/import-csv', authMiddleware, roleMiddleware(['super_admin', 'admin
               forExecutive: data.forExecutive?.toLowerCase() === 'true',
               shariaFacility: data.shariaFacility?.toLowerCase() === 'true',
               createdBy: req.user?.userId,
-              fspCode: process.env.FSP_CODE || 'FL8090'
+              fspCode: process.env.FSP_CODE || 'FL8090',
+              ...(req.tenant?.tenantId && {
+                tenantId: req.tenant.tenantId,
+                tenant: req.tenant.tenantObjectId
+              })
             });
           }
         })
@@ -427,15 +455,24 @@ router.post('/import-csv', authMiddleware, roleMiddleware(['super_admin', 'admin
     
     for (const productData of products) {
       try {
-        const existing = await Product.findOne({ productCode: productData.productCode });
+        const existingQuery = req.tenant?.tenantId
+          ? buildTenantQuery(req.tenant.tenantId, { productCode: productData.productCode })
+          : { productCode: productData.productCode };
+        const existing = await Product.findOne(existingQuery);
         if (existing) {
           await Product.updateOne(
-            { productCode: productData.productCode },
+            existingQuery,
             { $set: { ...productData, updatedBy: req.user?.userId } }
           );
           results.updated++;
         } else {
-          await Product.create(productData);
+          await Product.create({
+            ...productData,
+            ...(req.tenant?.tenantId && {
+              tenantId: req.tenant.tenantId,
+              tenant: req.tenant.tenantObjectId
+            })
+          });
           results.created++;
         }
       } catch (err) {

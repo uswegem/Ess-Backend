@@ -9,6 +9,9 @@ beforeAll(async () => {
   process.env.LEGACY_TENANT_ID = process.env.LEGACY_TENANT_ID || 'legacy-zedone';
   process.env.TENANT_ENFORCEMENT = process.env.TENANT_ENFORCEMENT || 'false';
   process.env.NODE_ENV = 'test';
+  process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-jwt-secret-key-for-unit-tests-only';
+  process.env.JWT_ACCESS_EXPIRES_IN = process.env.JWT_ACCESS_EXPIRES_IN || '1h';
+  process.env.JWT_REFRESH_EXPIRES_IN = process.env.JWT_REFRESH_EXPIRES_IN || '7d';
 
   // Start in-memory MongoDB server for tests
   mongoServer = await MongoMemoryServer.create();

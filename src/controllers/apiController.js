@@ -24,6 +24,7 @@ const { generateLoanNumber, generateFSPReferenceNumber } = require('../utils/loa
 
 // Import metrics tracking
 const { trackLoanMessage, trackLoanError } = require('../middleware/metricsMiddleware');
+const { runWithRequestTenant } = require('../utils/tenantContext');
 
 const parser = new xml2js.Parser({
     explicitArray: false,
@@ -71,6 +72,7 @@ const {
 
 // Export all functions before they are used
 exports.processRequest = async (req, res) => {
+    return runWithRequestTenant(req, async () => {
     const contentType = req.get('Content-Type');
     logger.info('Processing request in AUTO-SIGNATURE mode', { contentType });
     logger.debug('Request details', { 
@@ -175,6 +177,7 @@ exports.processRequest = async (req, res) => {
         const contentType = req.get('Content-Type');
         return sendErrorResponse(res, '8011', 'Error processing request: ' + errorMessage, contentType.includes('json') ? 'json' : 'xml', null);
     }
+    });
 };
 
 // Helper function to calculate monthly installment

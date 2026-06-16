@@ -1,5 +1,6 @@
 const logger = require('../utils/logger');
 const digitalSignature = require('../utils/signatureUtils');
+const { logSecurityEvent } = require('../utils/securityEventLogger');
 
 function extractFspCodeFromXml(body) {
   if (!body || typeof body !== 'string') return null;
@@ -15,6 +16,13 @@ function verifySignatureMiddleware(req, res, next) {
       tenantFspCode: req.tenant.fspCode,
       path: req.path
     });
+    logSecurityEvent({
+      eventType: 'fsp_code_mismatch',
+      description: `FSPCode mismatch: payload=${payloadFspCode}, tenant=${req.tenant.fspCode}`,
+      req,
+      tenantId: req.tenant.tenantId,
+      metadata: { payloadFspCode, tenantFspCode: req.tenant.fspCode }
+    }).catch(() => {});
     return res.status(403).json({
       success: false,
       message: 'FSPCode does not match authenticated tenant'

@@ -12,6 +12,19 @@ class AuditController {
 
       let filter = {};
 
+      if (req.authContext?.isSuperAdmin && !req.query.allTenants) {
+        if (req.tenant?.tenantId) {
+          filter.tenantId = req.tenant.tenantId;
+        }
+      } else if (req.tenant?.tenantId) {
+        filter.tenantId = req.tenant.tenantId;
+      } else if (!req.authContext?.isSuperAdmin) {
+        return res.status(403).json({
+          success: false,
+          message: 'Tenant context required for audit log access.'
+        });
+      }
+
       if (action) filter.action = action;
       if (userId) filter.userId = userId;
       if (status) filter.status = status;
@@ -57,11 +70,21 @@ class AuditController {
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
+      const matchStage = {
+        createdAt: { $gte: thirtyDaysAgo }
+      };
+      if (req.tenant?.tenantId && !req.query.allTenants) {
+        matchStage.tenantId = req.tenant.tenantId;
+      } else if (!req.authContext?.isSuperAdmin) {
+        return res.status(403).json({
+          success: false,
+          message: 'Tenant context required for audit statistics.'
+        });
+      }
+
       const stats = await AuditLog.aggregate([
         {
-          $match: {
-            createdAt: { $gte: thirtyDaysAgo }
-          }
+          $match: matchStage
         },
         {
           $group: {
@@ -81,7 +104,7 @@ class AuditController {
       ]);
 
       const totalLogs = await AuditLog.countDocuments({
-        createdAt: { $gte: thirtyDaysAgo }
+        ...matchStage
       });
 
       res.json({

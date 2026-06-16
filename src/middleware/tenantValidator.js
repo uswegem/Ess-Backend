@@ -7,6 +7,7 @@ const {
   compareHash,
   decryptSecret
 } = require('../utils/tenantSecretCrypto');
+const { logSecurityEvent } = require('../utils/securityEventLogger');
 
 const rateLimitStore = new Map();
 
@@ -98,6 +99,7 @@ async function logApiAccess(req, tenantId, endpoint) {
       actorType: req.authContext?.principalType === 'api_key' ? 'api_key' : 'user',
       apiKeyId: req.tenantApiKey?._id || null,
       userId: req.user?._id || req.authContext?.userId || undefined,
+      correlationId: req.correlationId,
       userAgent: req.get('User-Agent'),
       ipAddress: req.ip,
       resource: endpoint,
@@ -133,6 +135,14 @@ async function tenantValidator(req, res, next) {
       const ip = req.ip;
       const whitelist = req.tenantApiKey.ipWhitelist || [];
       if (whitelist.length > 0 && !whitelist.includes(ip)) {
+        await logSecurityEvent({
+          eventType: 'ip_whitelist_rejected',
+          description: `IP ${ip} not in API key whitelist`,
+          req,
+          tenantId: req.tenant.tenantId,
+          apiKeyId: req.tenantApiKey._id,
+          actorType: 'api_key'
+        });
         return res.status(403).json({
           success: false,
           message: 'IP address not allowed for this API key'
@@ -143,6 +153,21 @@ async function tenantValidator(req, res, next) {
     await logApiAccess(req, req.tenant.tenantId, req.path);
     return next();
   } catch (error) {
+    if (error.statusCode === 429) {
+      await logSecurityEvent({
+        eventType: 'rate_limit_exceeded',
+        description: error.message,
+        req,
+        tenantId: req.tenant?.tenantId
+      });
+    } else if (error.statusCode === 403) {
+      await logSecurityEvent({
+        eventType: 'tenant_inactive',
+        description: error.message,
+        req,
+        tenantId: req.tenant?.tenantId
+      });
+    }
     return res.status(error.statusCode || 500).json({
       success: false,
       message: error.message || 'Tenant validation failed'

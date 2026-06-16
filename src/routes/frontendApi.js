@@ -219,7 +219,8 @@ router.get('/loan/status/:applicationNumber', async (req, res) => {
     const { applicationNumber } = req.params;
 
     // Find loan mapping
-    const loanMapping = await LoanMappingService.getByEssApplicationNumber(applicationNumber, false);
+    const tenantId = req.tenant?.tenantId || null;
+    const loanMapping = await LoanMappingService.getByEssApplicationNumber(applicationNumber, false, tenantId);
 
     if (!loanMapping) {
       return res.status(404).json({
@@ -279,7 +280,8 @@ router.get('/loan/details/:loanNumber', async (req, res) => {
     const { loanNumber } = req.params;
 
     // Find loan by number
-    const loanMapping = await LoanMappingService.getByEssLoanNumberAlias(loanNumber);
+    const tenantId = req.tenant?.tenantId || null;
+    const loanMapping = await LoanMappingService.getByEssLoanNumberAlias(loanNumber, tenantId);
 
     if (!loanMapping || !loanMapping.mifosLoanId) {
       return res.status(404).json({

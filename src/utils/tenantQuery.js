@@ -7,6 +7,25 @@ function buildTenantQuery(tenantId, baseQuery = {}) {
   return { ...baseQuery, tenantId };
 }
 
+const LEGACY_TENANT_ID = () => process.env.LEGACY_TENANT_ID || 'legacy-zedone';
+
+function buildTenantListQuery(tenantId, baseQuery = {}) {
+  if (!tenantId) {
+    return baseQuery;
+  }
+  if (tenantId === LEGACY_TENANT_ID()) {
+    return {
+      ...baseQuery,
+      $or: [
+        { tenantId },
+        { tenantId: { $exists: false } },
+        { tenantId: null }
+      ]
+    };
+  }
+  return { ...baseQuery, tenantId };
+}
+
 function filterResults(results, tenantId) {
   if (!tenantId) return results;
   if (Array.isArray(results)) {
@@ -58,6 +77,7 @@ function withTenantFilter(req, baseQuery = {}) {
 
 module.exports = {
   buildTenantQuery,
+  buildTenantListQuery,
   filterResults,
   secureFindOne,
   secureFindMany,

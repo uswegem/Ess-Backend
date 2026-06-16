@@ -4,18 +4,30 @@ const ClientService = require('./clientService');
 const DBTransaction = require('../utils/dbTransaction');
 const healthMonitor = require('../utils/loanMappingHealthMonitor');
 const { buildTenantQuery } = require('../utils/tenantQuery');
+const { getActiveTenantContext } = require('../utils/tenantContext');
 
 class LoanMappingService {
+  static resolveTenantId(tenantId = null) {
+    return tenantId || getActiveTenantContext()?.tenantId || null;
+  }
+
+  static resolveTenantObjectId(tenantObjectId = null) {
+    return tenantObjectId || getActiveTenantContext()?.tenantObjectId || null;
+  }
+
   static scopeFilter(filter = {}, tenantId = null) {
-    return tenantId ? buildTenantQuery(tenantId, filter) : filter;
+    const tid = this.resolveTenantId(tenantId);
+    return tid ? buildTenantQuery(tid, filter) : filter;
   }
 
   static applyWriteScope(data = {}, tenantId = null, tenantObjectId = null) {
-    if (!tenantId) return data;
+    const tid = this.resolveTenantId(tenantId);
+    const toid = this.resolveTenantObjectId(tenantObjectId);
+    if (!tid) return data;
     return {
       ...data,
-      tenantId,
-      ...(tenantObjectId ? { tenant: tenantObjectId } : {})
+      tenantId: tid,
+      ...(toid ? { tenant: toid } : {})
     };
   }
   /**
@@ -90,7 +102,7 @@ class LoanMappingService {
   /**
    * Create initial loan mapping when LOAN_INITIAL_APPROVAL_NOTIFICATION is sent
    */
-  static async createInitialMapping(essApplicationNumber, essCheckNumber, fspReferenceNumber, loanDetails) {
+  static async createInitialMapping(essApplicationNumber, essCheckNumber, fspReferenceNumber, loanDetails, tenantId = null, tenantObjectId = null) {
     const startTime = Date.now();
     
     try {
@@ -107,10 +119,10 @@ class LoanMappingService {
 
       // Check if mapping already exists to prevent duplicates
       // IMPORTANT: Exclude CANCELLED loans - they should not block new applications
-      const existingMapping = await LoanMapping.findOne({
+      const existingMapping = await LoanMapping.findOne(this.scopeFilter({
         essApplicationNumber,
-        status: { $nin: ['CANCELLED', 'REJECTED'] } // Exclude inactive statuses
-      });
+        status: { $nin: ['CANCELLED', 'REJECTED'] }
+      }, tenantId));
 
       if (existingMapping) {
         logger.warn(`⚠️ Active loan mapping already exists for application: ${essApplicationNumber}`, {
@@ -122,10 +134,10 @@ class LoanMappingService {
       }
 
       // Check if a CANCELLED or REJECTED mapping exists (for logging)
-      const cancelledMapping = await LoanMapping.findOne({
+      const cancelledMapping = await LoanMapping.findOne(this.scopeFilter({
         essApplicationNumber,
         status: { $in: ['CANCELLED', 'REJECTED'] }
-      });
+      }, tenantId));
 
       if (cancelledMapping) {
         logger.info(`ℹ️ Found ${cancelledMapping.status} loan mapping for application: ${essApplicationNumber}. Creating new mapping as this is treated as inactive.`, {
@@ -134,23 +146,23 @@ class LoanMappingService {
         });
       }
 
-      const mapping = new LoanMapping({
+      const mapping = new LoanMapping(this.applyWriteScope({
         essApplicationNumber,
         essCheckNumber,
         fspReferenceNumber,
-        essLoanNumberAlias: loanDetails.essLoanNumberAlias, // Properly set from loanDetails
-        productCode: loanDetails.productCode || "17", // Default product code if not provided
+        essLoanNumberAlias: loanDetails.essLoanNumberAlias,
+        productCode: loanDetails.productCode || "17",
         requestedAmount: loanDetails.requestedAmount,
-        tenure: loanDetails.tenure || 24, // Default tenure if not provided
+        tenure: loanDetails.tenure || 24,
         mifosClientId: loanDetails.clientId,
         mifosLoanId: loanDetails.loanId,
-        status: loanDetails.status || 'INITIAL_OFFER', // Use provided status or default
+        status: loanDetails.status || 'INITIAL_OFFER',
         metadata: {
           initialOfferDetails: loanDetails,
           createdVia: 'createInitialMapping',
           createdAt: new Date().toISOString()
         }
-      });
+      }, tenantId, tenantObjectId));
 
       await mapping.save();
       const duration = Date.now() - startTime;

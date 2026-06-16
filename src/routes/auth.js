@@ -44,6 +44,7 @@ const apiController = require('../controllers/apiController');
 // Public routes
 router.post('/login', AuthController.login);
 router.post('/login-with-api-key', AuthController.loginWithApiKey);
+router.post('/refresh', AuthController.refresh);
 
 // Protected routes
 router.post('/select-tenant', authMiddleware, AuthController.selectTenant);

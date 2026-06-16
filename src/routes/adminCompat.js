@@ -18,9 +18,9 @@ router.post('/auth/logout', authMiddleware, AuthController.logout);
 router.get('/loan/list-products', authMiddleware, async (req, res) => {
     try {
         const Product = require('../models/Product');
-        const { buildTenantQuery } = require('../utils/tenantQuery');
+        const { buildTenantListQuery } = require('../utils/tenantQuery');
         const productQuery = req.tenant?.tenantId
-          ? buildTenantQuery(req.tenant.tenantId, { isActive: true })
+          ? buildTenantListQuery(req.tenant.tenantId, { isActive: true })
           : { isActive: true };
         const products = await Product.find(productQuery)
             .select({

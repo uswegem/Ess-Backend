@@ -57,4 +57,21 @@ describe('ApiKey model', () => {
     await apiKey.revoke(null, 'test');
     expect(apiKey.isUsable()).toBe(false);
   });
+
+  it('rotates key and revokes previous', async () => {
+    const { apiKey, rawKey } = await ApiKey.createForTenant({
+      tenant,
+      name: 'Rotate Key'
+    });
+
+    const result = await ApiKey.rotate(apiKey._id, { reason: 'test rotation' });
+    expect(result.rawKey).toMatch(/^mk_live_/);
+    expect(result.rawKey).not.toBe(rawKey);
+
+    const old = await ApiKey.findById(apiKey._id);
+    expect(old.isUsable()).toBe(false);
+
+    const found = await ApiKey.findByRawKey(result.rawKey);
+    expect(found._id.toString()).toBe(result.apiKey._id.toString());
+  });
 });

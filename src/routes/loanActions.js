@@ -1,20 +1,27 @@
 // Loan action routes for manually triggering notifications
 const express = require('express');
 const router = express.Router();
-const { authMiddleware, roleMiddleware } = require('../middleware/authMiddleware');
+const { authMiddleware, roleMiddleware, permissionMiddleware } = require('../middleware/authMiddleware');
 const LoanMappingService = require('../services/loanMappingService');
 const disbursementUtils = require('../utils/disbursementUtils');
 const digitalSignature = require('../utils/signatureUtils');
 const { formatDateForUTUMISHI } = require('../utils/dateUtils');
 const logger = require('../utils/logger');
 
+const loanActionGuards = [
+  authMiddleware,
+  roleMiddleware(['super_admin', 'admin', 'tenant_admin', 'operations_manager']),
+  permissionMiddleware('loans:operate')
+];
+
 /**
  * Send LOAN_DISBURSEMENT_NOTIFICATION manually
  * POST /api/v1/loan-actions/send-disbursement-notification
  */
-router.post('/send-disbursement-notification', authMiddleware, roleMiddleware(['super_admin', 'admin']), async (req, res) => {
+router.post('/send-disbursement-notification', ...loanActionGuards, async (req, res) => {
     try {
         const { loanId, applicationNumber } = req.body;
+        const tenantId = req.tenant?.tenantId || null;
 
         if (!loanId && !applicationNumber) {
             return res.status(400).json({ success: false, message: 'Either loanId or applicationNumber is required' });
@@ -23,9 +30,9 @@ router.post('/send-disbursement-notification', authMiddleware, roleMiddleware(['
         // Get loan mapping
         let loanMapping;
         if (loanId) {
-            loanMapping = await LoanMappingService.getByMifosLoanId(loanId);
+            loanMapping = await LoanMappingService.getByMifosLoanId(loanId, tenantId);
         } else {
-            loanMapping = await LoanMappingService.getByEssApplicationNumber(applicationNumber);
+            loanMapping = await LoanMappingService.getByEssApplicationNumber(applicationNumber, true, tenantId);
         }
 
         if (!loanMapping) {
@@ -62,7 +69,7 @@ router.post('/send-disbursement-notification', authMiddleware, roleMiddleware(['
         await LoanMappingService.updateStatus(loanMapping.essApplicationNumber, 'DISBURSED', {
             disbursedAt: new Date(),
             metadata: updatedMetadata
-        });
+        }, tenantId);
 
         logger.info(`Manual disbursement notification sent for loan: ${loanMapping.essApplicationNumber} by ${req.user.username}`);
 
@@ -87,9 +94,10 @@ router.post('/send-disbursement-notification', authMiddleware, roleMiddleware(['
  * Send LOAN_DISBURSEMENT_FAILURE_NOTIFICATION manually  
  * POST /api/v1/loan-actions/send-disbursement-failure
  */
-router.post('/send-disbursement-failure', authMiddleware, roleMiddleware(['super_admin', 'admin']), async (req, res) => {
+router.post('/send-disbursement-failure', ...loanActionGuards, async (req, res) => {
     try {
         const { loanId, applicationNumber, reason, errorDetails } = req.body;
+        const tenantId = req.tenant?.tenantId || null;
 
         if (!loanId && !applicationNumber) {
             return res.status(400).json({ success: false, message: 'Either loanId or applicationNumber is required' });
@@ -102,9 +110,9 @@ router.post('/send-disbursement-failure', authMiddleware, roleMiddleware(['super
         // Get loan mapping
         let loanMapping;
         if (loanId) {
-            loanMapping = await LoanMappingService.getByMifosLoanId(loanId);
+            loanMapping = await LoanMappingService.getByMifosLoanId(loanId, tenantId);
         } else {
-            loanMapping = await LoanMappingService.getByEssApplicationNumber(applicationNumber);
+            loanMapping = await LoanMappingService.getByEssApplicationNumber(applicationNumber, true, tenantId);
         }
 
         if (!loanMapping) {
@@ -148,7 +156,7 @@ router.post('/send-disbursement-failure', authMiddleware, roleMiddleware(['super
         await LoanMappingService.updateStatus(loanMapping.essApplicationNumber, 'FAILED', {
             failedAt: new Date(),
             metadata: updatedMetadata
-        });
+        }, tenantId);
 
         logger.info(`Manual disbursement failure notification sent for loan: ${loanMapping.essApplicationNumber} by ${req.user.username}`);
 

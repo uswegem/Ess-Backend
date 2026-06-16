@@ -1,15 +1,18 @@
 const winston = require('winston');
 const DailyRotateFile = require('winston-daily-rotate-file');
 
-// Import metrics tracking (with try-catch to avoid circular dependencies)
-let trackLogLevel;
-try {
-  const { trackLogLevel: track } = require('../middleware/metricsMiddleware');
-  trackLogLevel = track;
-} catch (err) {
-  // Metrics not available, continue without tracking
-  trackLogLevel = () => {};
-}
+// Lazy-load metrics tracking to avoid circular dependency with metricsMiddleware
+let trackLogLevelFn = null;
+const trackLogLevel = (level) => {
+  if (!trackLogLevelFn) {
+    try {
+      trackLogLevelFn = require('../middleware/metricsMiddleware').trackLogLevel;
+    } catch {
+      trackLogLevelFn = () => {};
+    }
+  }
+  trackLogLevelFn(level);
+};
 
 // Winston logger configuration for ESS application
 const logger = winston.createLogger({

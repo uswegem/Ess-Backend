@@ -38,10 +38,29 @@ This milestone includes **Milestone 2 prerequisites** (tenant models and databas
 | Item | Target Milestone |
 |------|------------------|
 | Tenant onboarding / CRUD REST APIs | M4 |
-| API key management UI and REST endpoints | M4 |
+| API key management UI | M5 |
 | Onboarding wizard and admin portal UI | M5 |
 | Per-tenant MIFOS client configuration | M4 / M5 |
 | Full frontend RBAC and tenant switcher UI | M5 |
+
+### Expanded Middleware & Auth Checklist (Implemented in M3 Completion)
+
+The following 10-item security checklist is now implemented in the backend (beyond the original M3 submission scope):
+
+| # | Requirement | Status |
+|---|-------------|--------|
+| 1 | Middleware for tenant isolation | Complete |
+| 2 | API key authentication system | Complete |
+| 3 | Query filtering utilities | Complete (with AsyncLocalStorage propagation for XML handlers) |
+| 4 | Unit tests | Complete (auth, audit, rotation, refresh tests added) |
+| 5 | JWT authentication | Complete (short-lived access tokens) |
+| 6 | RBAC | Complete (`permissionMiddleware` + tenant-role-aware `roleMiddleware`) |
+| 7 | Refresh token strategy | Complete (`RefreshToken` model, rotation on refresh, logout revocation) |
+| 8 | API key rotation | Complete (`ApiKey.rotate()` + `POST .../api-keys/:id/rotate`) |
+| 9 | Audit logging | Complete (correlation IDs, tenant-filtered reads) |
+| 10 | Security event logging | Complete (`security_event` action via `securityEventLogger`) |
+
+**Scope decision:** Client acceptance uses the expanded 10-item checklist above, not only the narrower original M3 submission table.
 
 ---
 

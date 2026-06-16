@@ -188,4 +188,50 @@ apiKeySchema.statics.findByRawKey = async function findByRawKey(rawKey) {
   return null;
 };
 
+apiKeySchema.statics.rotate = async function rotate(keyId, {
+  revokedBy = null,
+  reason = 'rotated',
+  nameSuffix = ' (rotated)'
+} = {}) {
+  const oldKey = await this.findById(keyId);
+  if (!oldKey) {
+    const error = new Error('API key not found');
+    error.statusCode = 404;
+    throw error;
+  }
+  if (!oldKey.isUsable()) {
+    const error = new Error('API key is not active');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const Tenant = mongoose.model('Tenant');
+  const tenant = await Tenant.findOne({ tenantId: oldKey.tenantId });
+  if (!tenant) {
+    const error = new Error('Tenant not found for API key');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  const created = await this.createForTenant({
+    tenant,
+    name: `${oldKey.name}${nameSuffix}`,
+    permissions: oldKey.permissions,
+    expiresAt: oldKey.expiresAt,
+    rateLimit: oldKey.rateLimit,
+    ipWhitelist: oldKey.ipWhitelist,
+    createdBy: revokedBy,
+    keyPrefix: oldKey.keyPrefix?.startsWith('mk_test') ? 'mk_test' : 'mk_live'
+  });
+
+  await oldKey.revoke(revokedBy, reason);
+
+  return {
+    previousKey: oldKey.toSafeJSON(),
+    apiKey: created.apiKey.toSafeJSON(),
+    rawKey: created.rawKey,
+    rawSecret: created.rawSecret
+  };
+};
+
 module.exports = mongoose.model('ApiKey', apiKeySchema);

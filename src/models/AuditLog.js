@@ -28,7 +28,9 @@ const auditLogSchema = new mongoose.Schema({
     required: true,
     enum: [
       'login', 'logout', 'create_user', 'update_user', 'delete_user',
-      'create_loan', 'update_loan', 'api_call', 'system_event'
+      'create_loan', 'update_loan', 'api_call', 'system_event',
+      'security_event', 'api_key_rotate', 'api_key_revoke', 'api_key_create',
+      'token_refresh', 'select_tenant'
     ]
   },
   description: {
@@ -39,8 +41,7 @@ const auditLogSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
     required: function() {
-      // userId optional for api_call and failed login attempts
-      return !['api_call', 'login'].includes(this.action);
+      return !['api_call', 'login', 'security_event', 'token_refresh'].includes(this.action);
     }
   },
   userAgent: {

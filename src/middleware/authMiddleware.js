@@ -9,9 +9,11 @@ const {
   resolveTenantMembership,
   buildTenantContext
 } = require('./tenantMiddleware');
-const { tenantValidator } = require('./tenantValidator');
+const { logSecurityEvent } = require('../utils/securityEventLogger');
 
 const LEGACY_TENANT_ID = () => process.env.LEGACY_TENANT_ID || 'legacy-zedone';
+
+const TENANT_ADMIN_ROLES = ['tenant_admin', 'operations_manager', 'finance_officer', 'support_staff'];
 
 function buildAuthContext({ user, decoded, apiKey, membership }) {
   if (apiKey) {
@@ -70,6 +72,18 @@ async function resolveActiveTenantForUser(user) {
   };
 }
 
+async function resolveApiKeyFromJwt(decoded) {
+  const apiKey = await ApiKey.findById(decoded.apiKeyId);
+  if (!apiKey || !apiKey.isUsable()) {
+    return null;
+  }
+  const tenant = await Tenant.findOne({ tenantId: decoded.tenantId || apiKey.tenantId });
+  if (!tenant || !tenant.isOperational()) {
+    return null;
+  }
+  return { apiKey, tenant };
+}
+
 const authMiddleware = async (req, res, next) => {
   try {
     const apiKeyHeader = req.header('X-Tenant-Key');
@@ -88,9 +102,39 @@ const authMiddleware = async (req, res, next) => {
     }
 
     const decoded = JWTUtils.verifyToken(token);
+
+    if (decoded.principalType === 'api_key' && decoded.apiKeyId) {
+      const resolved = await resolveApiKeyFromJwt(decoded);
+      if (!resolved) {
+        await logSecurityEvent({
+          eventType: 'invalid_api_key',
+          description: 'Invalid or expired API key JWT',
+          req,
+          actorType: 'api_key',
+          metadata: { apiKeyId: decoded.apiKeyId }
+        });
+        return res.status(401).json({
+          success: false,
+          message: 'Invalid or expired API key token.'
+        });
+      }
+
+      req.tenantApiKey = resolved.apiKey;
+      req.tenant = buildTenantContext(resolved.tenant, 'api_key');
+      req.tokenPayload = decoded;
+      req.authContext = buildAuthContext({ apiKey: resolved.apiKey });
+      return next();
+    }
+
     const user = await User.findById(decoded.userId).select('-password');
 
     if (!user) {
+      await logSecurityEvent({
+        eventType: 'invalid_jwt',
+        description: 'JWT references unknown user',
+        req,
+        metadata: { userId: decoded.userId }
+      });
       return res.status(401).json({
         success: false,
         message: 'Invalid token. User not found.'
@@ -98,6 +142,12 @@ const authMiddleware = async (req, res, next) => {
     }
 
     if (!user.isActive) {
+      await logSecurityEvent({
+        eventType: 'deactivated_account',
+        description: `Deactivated account access attempt: ${user.username}`,
+        req,
+        userId: user._id
+      });
       return res.status(401).json({
         success: false,
         message: 'Account is deactivated.'
@@ -108,6 +158,13 @@ const authMiddleware = async (req, res, next) => {
     if (decoded.tenantId) {
       membership = await resolveTenantMembership(user._id, decoded.tenantId);
       if (!membership && user.role !== 'super_admin') {
+        await logSecurityEvent({
+          eventType: 'permission_denied',
+          description: `No tenant membership for ${decoded.tenantId}`,
+          req,
+          userId: user._id,
+          tenantId: decoded.tenantId
+        });
         return res.status(403).json({
           success: false,
           message: 'No active membership for selected tenant.'
@@ -128,6 +185,12 @@ const authMiddleware = async (req, res, next) => {
 
     next();
   } catch (error) {
+    await logSecurityEvent({
+      eventType: 'invalid_jwt',
+      description: 'Invalid or expired JWT',
+      req,
+      metadata: { error: error.message }
+    });
     return res.status(401).json({
       success: false,
       message: 'Invalid token.'
@@ -137,22 +200,74 @@ const authMiddleware = async (req, res, next) => {
 
 const roleMiddleware = (roles) => {
   return (req, res, next) => {
-    if (!req.user && !req.tenantApiKey) {
+    if (!req.user && !req.tenantApiKey && req.authContext?.principalType !== 'api_key') {
       return res.status(401).json({
         success: false,
         message: 'Authentication required.'
       });
     }
 
-    const role = req.user?.role || req.authContext?.role;
-    if (!roles.includes(role)) {
-      return res.status(403).json({
+    if (req.authContext?.isSuperAdmin) {
+      return next();
+    }
+
+    const candidateRoles = [
+      req.user?.role,
+      req.authContext?.role,
+      req.tenantApiKey ? 'api_key' : null
+    ].filter(Boolean);
+
+    if (candidateRoles.some((role) => roles.includes(role))) {
+      return next();
+    }
+
+    logSecurityEvent({
+      eventType: 'permission_denied',
+      description: `Role denied. Required: ${roles.join(', ')}`,
+      req,
+      userId: req.user?._id,
+      metadata: { candidateRoles, requiredRoles: roles }
+    }).catch(() => {});
+
+    return res.status(403).json({
+      success: false,
+      message: 'Access denied. Insufficient permissions.'
+    });
+  };
+};
+
+const permissionMiddleware = (...requiredPermissions) => {
+  return (req, res, next) => {
+    if (!req.authContext) {
+      return res.status(401).json({
         success: false,
-        message: 'Access denied. Insufficient permissions.'
+        message: 'Authentication required.'
       });
     }
 
-    next();
+    if (req.authContext.isSuperAdmin) {
+      return next();
+    }
+
+    const granted = req.authContext.permissions || [];
+    const hasAll = requiredPermissions.every((permission) => granted.includes(permission));
+
+    if (!hasAll) {
+      logSecurityEvent({
+        eventType: 'permission_denied',
+        description: `Permission denied. Required: ${requiredPermissions.join(', ')}`,
+        req,
+        userId: req.user?._id,
+        metadata: { requiredPermissions, granted }
+      }).catch(() => {});
+
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. Missing required permissions.'
+      });
+    }
+
+    return next();
   };
 };
 
@@ -172,6 +287,7 @@ const auditMiddleware = async (req, res, next) => {
         tenant: req.tenant?.tenantObjectId,
         actorType: req.authContext?.principalType || 'user',
         apiKeyId: req.tenantApiKey?._id,
+        correlationId: req.correlationId,
         userAgent: req.get('User-Agent'),
         ipAddress: req.ip || req.connection?.remoteAddress,
         resource: req.path,
@@ -199,9 +315,15 @@ function getActionFromRoute(req) {
 
   if (path.includes('/auth/login')) return 'login';
   if (path.includes('/auth/logout')) return 'logout';
+  if (path.includes('/auth/refresh')) return 'token_refresh';
+  if (path.includes('/auth/select-tenant')) return 'select_tenant';
+  if (path.includes('/api-keys') && method === 'POST' && path.includes('/rotate')) return 'api_key_rotate';
+  if (path.includes('/api-keys') && method === 'POST') return 'api_key_create';
+  if (path.includes('/api-keys') && method === 'DELETE') return 'api_key_revoke';
   if (path.includes('/users') && method === 'POST') return 'create_user';
   if (path.includes('/users') && method === 'PUT') return 'update_user';
   if (path.includes('/users') && method === 'DELETE') return 'delete_user';
+  if (path.includes('/products') && method === 'POST') return 'system_event';
   if (path.includes('/emkopo')) return 'api_call';
 
   return 'system_event';
@@ -210,7 +332,9 @@ function getActionFromRoute(req) {
 module.exports = {
   authMiddleware,
   roleMiddleware,
+  permissionMiddleware,
   auditMiddleware,
   buildAuthContext,
-  resolveActiveTenantForUser
+  resolveActiveTenantForUser,
+  TENANT_ADMIN_ROLES
 };

@@ -25,7 +25,7 @@ if (process.env.NODE_ENV !== 'test') {
 // Import routes
 const apiRouter = require('./src/routes/api');
 const authRoutes = require('./src/routes/auth');
-const userRoutes = require('./src/routes/auth');
+const userRoutes = require('./src/routes/users');
 const auditRoutes = require('./src/routes/audit');
 const adminCompatRoutes = require('./src/routes/adminCompat');
 const loanActionsRoutes = require('./src/routes/loanActions');
@@ -37,6 +37,7 @@ const { verifySignatureMiddleware } = require('./src/middleware/signatureMiddlew
 const { auditMiddleware } = require('./src/middleware/authMiddleware');
 const { attachTenantToRequest } = require('./src/middleware/tenantMiddleware');
 const { tenantValidator } = require('./src/middleware/tenantValidator');
+const { correlationMiddleware } = require('./src/middleware/correlationMiddleware');
 const { httpMetricsMiddleware, metricsHandler, trackLoanMessage, trackLoanError } = require('./src/middleware/metricsMiddleware');
 
 // Import database
@@ -210,7 +211,8 @@ app.use((req, res, next) => {
     next();
 });
 
-// 6. Tenant context middleware (before protected routes)
+// 6. Correlation ID + tenant context middleware (before protected routes)
+app.use(correlationMiddleware);
 app.use(attachTenantToRequest);
 app.use(tenantValidator);
 
@@ -259,6 +261,10 @@ app.use('/api/v1', adminCompatRoutes);
 // Product management routes
 const productRoutes = require('./src/routes/products');
 app.use('/api/v1/products', productRoutes);
+
+// API key management routes
+const apiKeyRoutes = require('./src/routes/apiKeys');
+app.use('/api/v1/tenants/:tenantId/api-keys', apiKeyRoutes);
 
 // Loan action routes for manual notifications (protected)
 app.use('/api/v1/loan-actions', loanActionsRoutes);
