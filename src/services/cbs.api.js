@@ -1,10 +1,65 @@
 const logger = require('../utils/logger');
-const axios = require("axios");
+const axios = require('axios');
 const dotenv = require('dotenv');
 dotenv.config();
-const fs = require('fs')
 const https = require('https');
+const Tenant = require('../models/Tenant');
+const { getActiveTenantContext } = require('../utils/tenantContext');
+const mifosTenantClient = require('./mifosTenantClient');
+const { useTenantMifos, clearTenantTokenCache } = mifosTenantClient;
+const authManager = require('./mifosAuthManager');
 const { createMifosCircuitBreaker, getCircuitBreakerHealth } = require('../config/circuitBreaker');
+
+const tenantDocCache = new Map();
+
+async function resolveTenantDocument() {
+  if (!useTenantMifos()) {
+    return null;
+  }
+  const ctx = getActiveTenantContext();
+  if (!ctx?.tenantId) {
+    return null;
+  }
+  const cached = tenantDocCache.get(ctx.tenantId);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.doc;
+  }
+  const doc = await Tenant.findOne({ tenantId: ctx.tenantId });
+  if (doc) {
+    tenantDocCache.set(ctx.tenantId, { doc, expiresAt: Date.now() + 60 * 1000 });
+  }
+  return doc;
+}
+
+async function applyTenantMifosToConfig(config, userType = 'maker') {
+  const tenant = await resolveTenantDocument();
+  if (!tenant) {
+    return config;
+  }
+
+  authManager.setActiveTenant(tenant);
+  const effective = mifosTenantClient.getEffectiveConfig(tenant);
+  if (effective.baseUrl) {
+    config.baseURL = effective.baseUrl.replace(/\/$/, '');
+  }
+  if (effective.tenantId) {
+    config.headers['Mifos-Platform-TenantId'] = effective.tenantId;
+  }
+  if (effective.timeoutMs) {
+    config.timeout = effective.timeoutMs;
+  }
+
+  try {
+    const token = await mifosTenantClient.getTokenForTenant(tenant, userType);
+    config.headers.Authorization = `Basic ${token}`;
+  } catch (err) {
+    logger.warn('Tenant MIFOS token resolution failed, falling back to env credentials', {
+      tenantId: tenant.tenantId,
+      error: err.message
+    });
+  }
+  return config;
+}
 
 const CBS_MAKER_USERNAME = process.env.CBS_MAKER_USERNAME;
 const CBS_MAKER_PASSWORD = process.env.CBS_MAKER_PASSWORD;
@@ -35,10 +90,9 @@ const maker = axios.create({
 maker.interceptors.request.use(
   async (config) => {
     try {
-      // Get basic auth headers
-      const authHeaders = { 'Authorization': `Basic ${Buffer.from(`${CBS_MAKER_USERNAME}:${CBS_MAKER_PASSWORD}`).toString('base64')}` };
-      if (authHeaders.Authorization) {
-        config.headers.Authorization = authHeaders.Authorization;
+      await applyTenantMifosToConfig(config, 'maker');
+      if (!config.headers.Authorization) {
+        config.headers.Authorization = `Basic ${Buffer.from(`${CBS_MAKER_USERNAME}:${CBS_MAKER_PASSWORD}`).toString('base64')}`;
       }
       
       // Log request with correlation ID
@@ -116,10 +170,20 @@ const checker = axios.create({
   httpsAgent,
   headers: {
     'Content-Type': 'application/json',
-    'Mifos-Platform-TenantId': CBS_Tenant,
-    'Authorization': `Basic ${Buffer.from(`${process.env.CBS_CHECKER_USERNAME}:${process.env.CBS_CHECKER_PASSWORD}`).toString('base64')}`
+    'Mifos-Platform-TenantId': CBS_Tenant
   }
 });
+
+checker.interceptors.request.use(
+  async (config) => {
+    await applyTenantMifosToConfig(config, 'checker');
+    if (!config.headers.Authorization) {
+      config.headers.Authorization = `Basic ${Buffer.from(`${process.env.CBS_CHECKER_USERNAME}:${process.env.CBS_CHECKER_PASSWORD}`).toString('base64')}`;
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
 
 /**
  * Wrap axios client request method with circuit breaker
@@ -225,11 +289,17 @@ function getCircuitBreakerStatus() {
 module.exports = {
   maker: makerWithCircuitBreaker,
   checker: checkerWithCircuitBreaker,
+  authManager,
   getCircuitBreakerStatus,
-  getHealthStatus: () => ({ 
-    status: 'healthy', 
+  getHealthStatus: () => ({
+    status: 'healthy',
     services: [],
     circuitBreakers: getCircuitBreakerStatus()
   }),
-  clearTokenCache: () => { /* Token cache cleared */ }
+  clearTokenCache: () => {
+    clearTenantTokenCache();
+    tenantDocCache.clear();
+  },
+  resolveTenantDocument,
+  applyTenantMifosToConfig
 };

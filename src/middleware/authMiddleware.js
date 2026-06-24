@@ -245,7 +245,7 @@ const permissionMiddleware = (...requiredPermissions) => {
       });
     }
 
-    if (req.authContext.isSuperAdmin) {
+    if (req.authContext.isSuperAdmin || req.user?.role === 'admin') {
       return next();
     }
 
@@ -270,6 +270,8 @@ const permissionMiddleware = (...requiredPermissions) => {
     return next();
   };
 };
+
+const platformOrPermissionMiddleware = (...requiredPermissions) => permissionMiddleware(...requiredPermissions);
 
 const auditMiddleware = async (req, res, next) => {
   const originalSend = res.send;
@@ -320,6 +322,12 @@ function getActionFromRoute(req) {
   if (path.includes('/api-keys') && method === 'POST' && path.includes('/rotate')) return 'api_key_rotate';
   if (path.includes('/api-keys') && method === 'POST') return 'api_key_create';
   if (path.includes('/api-keys') && method === 'DELETE') return 'api_key_revoke';
+  if (path.includes('/tenants') && method === 'POST' && !path.includes('/users') && !path.includes('/api-keys')) return 'tenant_create';
+  if (path.includes('/tenants') && method === 'PUT' && !path.includes('/users')) return 'tenant_update';
+  if (path.includes('/status') && method === 'PATCH') return 'tenant_status_change';
+  if (path.includes('/onboarding') && path.includes('/submit')) return 'onboarding_submit';
+  if (path.includes('/onboarding') && path.includes('/review')) return 'onboarding_review';
+  if (path.includes('/tenants') && path.includes('/users') && method === 'POST') return 'tenant_user_create';
   if (path.includes('/users') && method === 'POST') return 'create_user';
   if (path.includes('/users') && method === 'PUT') return 'update_user';
   if (path.includes('/users') && method === 'DELETE') return 'delete_user';
@@ -333,6 +341,7 @@ module.exports = {
   authMiddleware,
   roleMiddleware,
   permissionMiddleware,
+  platformOrPermissionMiddleware,
   auditMiddleware,
   buildAuthContext,
   resolveActiveTenantForUser,

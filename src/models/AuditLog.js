@@ -30,7 +30,9 @@ const auditLogSchema = new mongoose.Schema({
       'login', 'logout', 'create_user', 'update_user', 'delete_user',
       'create_loan', 'update_loan', 'api_call', 'system_event',
       'security_event', 'api_key_rotate', 'api_key_revoke', 'api_key_create',
-      'token_refresh', 'select_tenant'
+      'token_refresh', 'select_tenant',
+      'tenant_create', 'tenant_update', 'tenant_status_change',
+      'onboarding_submit', 'onboarding_review', 'tenant_user_create'
     ]
   },
   description: {

@@ -27,10 +27,6 @@ class ApiKeyController {
       const { tenantId } = req.params;
       const { name, permissions = [], expiresAt, rateLimit, ipWhitelist, keyPrefix } = req.body;
 
-      if (!name) {
-        return res.status(400).json({ success: false, message: 'name is required.' });
-      }
-
       const tenant = await Tenant.findOne({ tenantId });
       if (!tenant) {
         return res.status(404).json({ success: false, message: 'Tenant not found.' });
@@ -98,6 +94,33 @@ class ApiKeyController {
       });
 
       res.json({ success: true, message: 'API key revoked.', data: { apiKey: apiKey.toSafeJSON() } });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
+  static async getKeyUsage(req, res) {
+    try {
+      const { tenantId, keyId } = req.params;
+      const apiKey = await ApiKey.findOne({ _id: keyId, tenantId });
+      if (!apiKey) {
+        return res.status(404).json({ success: false, message: 'API key not found.' });
+      }
+
+      res.json({
+        success: true,
+        data: {
+          usage: {
+            apiKeyId: apiKey._id,
+            name: apiKey.name,
+            status: apiKey.status,
+            lastUsedAt: apiKey.lastUsedAt,
+            usageCount: apiKey.usageCount,
+            rateLimit: apiKey.rateLimit,
+            expiresAt: apiKey.expiresAt
+          }
+        }
+      });
     } catch (error) {
       res.status(500).json({ success: false, message: error.message });
     }

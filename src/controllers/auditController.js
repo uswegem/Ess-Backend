@@ -12,10 +12,10 @@ class AuditController {
 
       let filter = {};
 
-      if (req.authContext?.isSuperAdmin && !req.query.allTenants) {
-        if (req.tenant?.tenantId) {
-          filter.tenantId = req.tenant.tenantId;
-        }
+      if (req.query.tenantId) {
+        filter.tenantId = req.query.tenantId;
+      } else if (req.authContext?.isSuperAdmin && req.query.allTenants === 'true') {
+        // no tenant filter
       } else if (req.tenant?.tenantId) {
         filter.tenantId = req.tenant.tenantId;
       } else if (!req.authContext?.isSuperAdmin) {
@@ -123,6 +123,11 @@ class AuditController {
         message: 'Internal server error while fetching audit statistics.'
       });
     }
+  }
+
+  static async getTenantAuditLogs(req, res) {
+    req.query.tenantId = req.params.tenantId;
+    return AuditController.getAuditLogs(req, res);
   }
 }
 

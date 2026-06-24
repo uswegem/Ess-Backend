@@ -10,6 +10,9 @@
     "test": "jest --runInBand --forceExit --testPathIgnorePatterns='integration' --passWithNoTests",
     "test:integration": "jest --runInBand --forceExit tests/integration --passWithNoTests",
     "test:m3": "jest --runInBand --forceExit src/models/__tests__ src/middleware/__tests__ tests/integration/tenantIsolation.test.js tests/integration/auth.test.js",
+    "test:m4": "jest --runInBand --forceExit tests/integration/tenantCrud.test.js tests/integration/onboardingWorkflow.test.js tests/integration/tenantUsers.test.js tests/integration/apiKeysHttp.test.js tests/integration/mifosTenantConfig.test.js",
+    "docs:postman-m4": "node \"../client documents/generate-m4-postman.js\"",
+    "docs:export-openapi": "node scripts/export-openapi.js",
     "test:all": "jest --runInBand --forceExit --passWithNoTests",
     "deploy": "./scripts/deploy-production.sh",
     "deploy:admin": "node deploy-admin.js",
@@ -58,7 +61,8 @@
     "jest": "^30.2.0",
     "mongodb-memory-server": "^10.1.2",
     "nodemon": "^3.0.1",
-    "supertest": "^7.1.4"
+    "supertest": "^7.1.4",
+    "yaml": "^2.9.0"
   },
   "jest": {
     "testEnvironment": "node",

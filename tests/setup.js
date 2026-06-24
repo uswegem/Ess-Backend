@@ -12,6 +12,9 @@ beforeAll(async () => {
   process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-jwt-secret-key-for-unit-tests-only';
   process.env.JWT_ACCESS_EXPIRES_IN = process.env.JWT_ACCESS_EXPIRES_IN || '1h';
   process.env.JWT_REFRESH_EXPIRES_IN = process.env.JWT_REFRESH_EXPIRES_IN || '7d';
+  process.env.CBS_BASE_URL = process.env.CBS_BASE_URL || 'https://mifos.test.example/api';
+  process.env.CBS_Tenant = process.env.CBS_Tenant || 'test-tenant';
+  process.env.USE_TENANT_MIFOS = process.env.USE_TENANT_MIFOS || 'true';
 
   // Start in-memory MongoDB server for tests
   mongoServer = await MongoMemoryServer.create();

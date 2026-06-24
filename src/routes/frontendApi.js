@@ -5,6 +5,7 @@ const { formatDateForMifos, formatDateForUTUMISHI, formatDateTimeForUTUMISHI } =
 const ClientService = require('../services/clientService');
 const LoanMappingService = require('../services/loanMappingService');
 const cbsApi = require('../services/cbs.api');
+const { runWithRequestTenant } = require('../utils/tenantContext');
 
 /**
  * Frontend API Routes
@@ -38,6 +39,12 @@ const validateRequest = (req, res, next) => {
 
 // Apply middleware to all routes
 router.use(validateRequest);
+router.use((req, res, next) => {
+  if (req.tenant) {
+    return runWithRequestTenant(req, () => next());
+  }
+  return next();
+});
 
 /**
  * POST /api/frontend/loan/check-eligibility

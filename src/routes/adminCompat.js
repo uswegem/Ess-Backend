@@ -15,6 +15,19 @@ router.get('/auth/profile', authMiddleware, AuthController.getProfile);
 router.post('/auth/logout', authMiddleware, AuthController.logout);
 
 // Product/Loan routes
+/**
+ * @swagger
+ * /api/v1/loan/list-products:
+ *   get:
+ *     summary: List products (admin compat)
+ *     description: Tenant-scoped active products for MiraAdmin frontend (M3).
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Formatted product list
+ */
 router.get('/loan/list-products', authMiddleware, async (req, res) => {
     try {
         const Product = require('../models/Product');
@@ -84,6 +97,19 @@ router.get('/loan/list-products', authMiddleware, async (req, res) => {
     }
 });
 
+/**
+ * @swagger
+ * /api/v1/loan/list-employee-loan:
+ *   get:
+ *     summary: List employee loans (admin compat)
+ *     description: Tenant-scoped loan mappings with details (M3).
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Loan list
+ */
 router.get('/loan/list-employee-loan', authMiddleware, async (req, res) => {
     try {
         const loans = await LoanMappingService.getAllWithDetails({
@@ -117,20 +143,20 @@ router.post('/admin/change_password', authMiddleware, AuthController.changePassw
 // Notification routes (for MiraAdmin frontend)
 router.get('/notification/list', authMiddleware, async (req, res) => {
     try {
-        // Return notifications from database or empty list
         const Notification = require('../models/Notification');
+        const { buildTenantListQuery } = require('../utils/tenantQuery');
         let notifications = [];
-        
+
         try {
-            notifications = await Notification.find()
+            const filter = buildTenantListQuery(req);
+            notifications = await Notification.find(filter)
                 .sort({ createdAt: -1 })
                 .limit(50)
                 .lean();
         } catch (e) {
-            // Model may not exist yet, return empty list
             notifications = [];
         }
-        
+
         res.json({
             success: true,
             data: { notifications }
@@ -144,7 +170,12 @@ router.get('/notification/list', authMiddleware, async (req, res) => {
 router.put('/notification/read/:id', authMiddleware, async (req, res) => {
     try {
         const Notification = require('../models/Notification');
-        await Notification.findByIdAndUpdate(req.params.id, { read: true });
+        const { buildTenantQuery } = require('../utils/tenantQuery');
+        const filter = { _id: req.params.id, ...buildTenantQuery(req) };
+        const updated = await Notification.findOneAndUpdate(filter, { read: true });
+        if (!updated) {
+            return res.status(404).json({ success: false, message: 'Notification not found' });
+        }
         res.json({ success: true, message: 'Notification marked as read' });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });

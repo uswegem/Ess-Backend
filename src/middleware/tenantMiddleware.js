@@ -16,12 +16,23 @@ const PUBLIC_PATH_PREFIXES = [
   '/api/v1/auth/login',
   '/api/auth/login',
   '/api/v1/auth/login-with-api-key',
-  '/api/auth/login-with-api-key'
+  '/api/auth/login-with-api-key',
+  '/api/v1/auth/refresh'
+];
+
+const TENANT_OPTIONAL_PREFIXES = [
+  '/api/v1/tenants',
+  '/api/v1/onboarding'
 ];
 
 function isPublicRoute(req) {
   const path = req.path || '';
   return PUBLIC_PATH_PREFIXES.some((prefix) => path === prefix || path.startsWith(`${prefix}/`));
+}
+
+function isTenantOptionalRoute(req) {
+  const path = req.path || '';
+  return TENANT_OPTIONAL_PREFIXES.some((prefix) => path === prefix || path.startsWith(`${prefix}/`));
 }
 
 function buildTenantContext(tenant, authMethod) {
@@ -40,16 +51,20 @@ async function extractTenantFromToken(req) {
   const token = req.header('Authorization')?.replace('Bearer ', '');
   if (!token) return null;
 
-  const decoded = JWTUtils.verifyToken(token);
-  if (!decoded.tenantId) return null;
+  try {
+    const decoded = JWTUtils.verifyToken(token);
+    if (!decoded.tenantId) return null;
 
-  const tenant = await Tenant.findOne({ tenantId: decoded.tenantId });
-  if (!tenant) return null;
+    const tenant = await Tenant.findOne({ tenantId: decoded.tenantId });
+    if (!tenant) return null;
 
-  return {
-    tenant: buildTenantContext(tenant, 'jwt'),
-    decoded
-  };
+    return {
+      tenant: buildTenantContext(tenant, 'jwt'),
+      decoded
+    };
+  } catch {
+    return null;
+  }
 }
 
 async function extractTenantFromApiKey(req) {
@@ -155,6 +170,9 @@ async function attachTenantToRequest(req, res, next) {
     }
 
     if (!tenantContext) {
+      if (isTenantOptionalRoute(req)) {
+        return next();
+      }
       return res.status(403).json({
         success: false,
         message: 'Tenant context could not be resolved'
@@ -184,6 +202,7 @@ async function resolveTenantMembership(userId, tenantId) {
 
 module.exports = {
   isPublicRoute,
+  isTenantOptionalRoute,
   extractTenantFromToken,
   extractTenantFromApiKey,
   attachTenantToRequest,

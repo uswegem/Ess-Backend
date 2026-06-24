@@ -15,8 +15,31 @@ const loanActionGuards = [
 ];
 
 /**
- * Send LOAN_DISBURSEMENT_NOTIFICATION manually
- * POST /api/v1/loan-actions/send-disbursement-notification
+ * @swagger
+ * /api/v1/loan-actions/send-disbursement-notification:
+ *   post:
+ *     summary: Send disbursement notification
+ *     description: Manually trigger LOAN_DISBURSEMENT_NOTIFICATION. Requires loans:operate; loan lookups scoped by tenant (M3).
+ *     tags: [Loan Actions]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               loanId: { type: string, description: MIFOS loan ID }
+ *               applicationNumber: { type: string, description: ESS application number }
+ *             description: Provide loanId or applicationNumber
+ *     responses:
+ *       200:
+ *         description: Notification sent; loan status updated to DISBURSED
+ *       400:
+ *         description: Invalid status or missing identifiers
+ *       404:
+ *         description: Loan mapping not found
  */
 router.post('/send-disbursement-notification', ...loanActionGuards, async (req, res) => {
     try {
@@ -91,8 +114,33 @@ router.post('/send-disbursement-notification', ...loanActionGuards, async (req, 
 });
 
 /**
- * Send LOAN_DISBURSEMENT_FAILURE_NOTIFICATION manually  
- * POST /api/v1/loan-actions/send-disbursement-failure
+ * @swagger
+ * /api/v1/loan-actions/send-disbursement-failure:
+ *   post:
+ *     summary: Send disbursement failure notification
+ *     description: Manually trigger LOAN_DISBURSEMENT_FAILURE_NOTIFICATION. Requires loans:operate (M3).
+ *     tags: [Loan Actions]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [reason]
+ *             properties:
+ *               loanId: { type: string }
+ *               applicationNumber: { type: string }
+ *               reason: { type: string }
+ *               errorDetails: { type: string }
+ *     responses:
+ *       200:
+ *         description: Failure notification sent; loan status updated to FAILED
+ *       400:
+ *         description: Missing reason or invalid status
+ *       404:
+ *         description: Loan mapping not found
  */
 router.post('/send-disbursement-failure', ...loanActionGuards, async (req, res) => {
     try {

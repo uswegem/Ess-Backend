@@ -1,5 +1,10 @@
 const logger = require('../utils/logger');
 const axios = require('axios');
+const {
+  getEffectiveConfig,
+  getTokenForTenant,
+  useTenantMifos
+} = require('./mifosTenantClient');
 
 /**
  * Enhanced MIFOS Authentication Manager
@@ -16,12 +21,22 @@ class MifosAuthManager {
             checker: null
         };
         this.refreshPromises = new Map();
+        this.activeTenant = null;
+    }
+
+    setActiveTenant(tenant) {
+        this.activeTenant = tenant;
     }
 
     /**
      * Get or refresh authentication token
      */
-    async getToken(userType = 'maker') {
+    async getToken(userType = 'maker', tenant = null) {
+        const resolvedTenant = tenant || this.activeTenant;
+        if (resolvedTenant && useTenantMifos()) {
+            return getTokenForTenant(resolvedTenant, userType);
+        }
+
         try {
             // Check if token is still valid
             if (this.isTokenValid(userType)) {
@@ -63,25 +78,30 @@ class MifosAuthManager {
      */
     async refreshToken(userType) {
         try {
+            const tenant = this.activeTenant;
+            const effective = tenant && useTenantMifos() ? getEffectiveConfig(tenant) : null;
             const credentials = userType === 'maker' ? {
-                username: process.env.CBS_MAKER_USERNAME,
-                password: process.env.CBS_MAKER_PASSWORD
+                username: effective?.makerUsername || process.env.CBS_MAKER_USERNAME,
+                password: effective?.makerPassword || process.env.CBS_MAKER_PASSWORD
             } : {
-                username: process.env.CBS_CHECKER_USERNAME,
-                password: process.env.CBS_CHECKER_PASSWORD
+                username: effective?.checkerUsername || process.env.CBS_CHECKER_USERNAME,
+                password: effective?.checkerPassword || process.env.CBS_CHECKER_PASSWORD
             };
+
+            const baseUrl = effective?.baseUrl || process.env.CBS_BASE_URL;
+            const fineractTenant = effective?.tenantId || process.env.CBS_Tenant;
 
             logger.info(`🔐 Refreshing ${userType} authentication token...`);
 
             const response = await axios.post(
-                `${process.env.CBS_BASE_URL}/v1/authentication`,
+                `${baseUrl}/v1/authentication`,
                 credentials,
                 {
                     headers: {
                         'Content-Type': 'application/json',
-                        'fineract-platform-tenantid': process.env.CBS_Tenant
+                        'fineract-platform-tenantid': fineractTenant
                     },
-                    timeout: 10000
+                    timeout: effective?.timeoutMs || 10000
                 }
             );
 
@@ -115,8 +135,8 @@ class MifosAuthManager {
     /**
      * Get authentication header with current token
      */
-    async getAuthHeader(userType = 'maker') {
-        const token = await this.getToken(userType);
+    async getAuthHeader(userType = 'maker', tenant = null) {
+        const token = await this.getToken(userType, tenant);
         return {
             'Authorization': `Basic ${token}`
         };

@@ -1,34 +1,26 @@
 const swaggerJsdoc = require('swagger-jsdoc');
+const { API_EXAMPLES } = require('../docs/apiRequestExamples');
 
 const options = {
   definition: {
     openapi: '3.0.0',
     info: {
-      title: 'ESS Loan Management API',
-      version: '1.0.0',
+      title: 'MiraCore ESS Multi-Tenant API',
+      version: '2.0.0',
       description: `
-        ESS (Employee Self-Service) Loan Management System API.
-        
-        This API handles loan processing between ESS UTUMISHI (Tanzania Government Employee Portal) 
-        and FSP (Financial Service Provider) via XML message exchange with digital signatures.
-        
-        ## Features
-        - Loan offer processing (new loans, top-ups, takeovers, restructures)
-        - Balance inquiries
-        - Final approval and disbursement
-        - Payment notifications
-        - Loan cancellations and rejections
-        - MIFOS Core Banking System integration
-        - Digital signature verification
+        MiraCore ESS Multi-Tenant Platform API — FSP onboarding, tenant management,
+        API keys, tenant users, and loan processing (XML + JSON admin endpoints).
         
         ## Authentication
-        - Admin endpoints require JWT token authentication
-        - Loan API endpoints use digital signature verification
+        - **JWT Bearer** for admin portal and onboarding APIs
+        - **X-Tenant-Key** (+ optional X-Tenant-Secret) for system-to-system FSP integration
         
-        ## Message Format
-        - All loan messages use XML with digital signatures
-        - Responses include FSP digital signatures
-        - Message types: LOAN_OFFER_REQUEST, TOP_UP_OFFER_REQUEST, etc.
+        ## Milestone 4 endpoints
+        - Tenant CRUD and status lifecycle
+        - Onboarding drafts, submit, review
+        - Per-tenant MIFOS configuration
+        - API key management (DELETE revoke — see release notes)
+        - Tenant user management
       `,
       contact: {
         name: 'ESS API Support',
@@ -41,8 +33,12 @@ const options = {
     },
     servers: [
       {
+        url: 'http://localhost:3008',
+        description: 'Local development (default)'
+      },
+      {
         url: 'http://localhost:3002',
-        description: 'Development server'
+        description: 'Development server (legacy port)'
       },
       {
         url: 'http://135.181.33.13:3002',
@@ -56,6 +52,12 @@ const options = {
           scheme: 'bearer',
           bearerFormat: 'JWT',
           description: 'JWT token for admin authentication'
+        },
+        tenantApiKey: {
+          type: 'apiKey',
+          in: 'header',
+          name: 'X-Tenant-Key',
+          description: 'Tenant API key for system-to-system auth'
         },
         digitalSignature: {
           type: 'apiKey',
@@ -232,74 +234,243 @@ const options = {
               type: 'object',
               description: 'Circuit breaker statistics',
               properties: {
-                fires: {
-                  type: 'integer',
-                  description: 'Total number of requests',
-                  example: 1250
-                },
-                successes: {
-                  type: 'integer',
-                  description: 'Number of successful requests',
-                  example: 1220
-                },
-                failures: {
-                  type: 'integer',
-                  description: 'Number of failed requests',
-                  example: 25
-                },
-                rejects: {
-                  type: 'integer',
-                  description: 'Number of rejected requests (circuit open)',
-                  example: 5
-                },
-                timeouts: {
-                  type: 'integer',
-                  description: 'Number of timeout failures',
-                  example: 3
-                },
-                fallbacks: {
-                  type: 'integer',
-                  description: 'Number of fallback executions',
-                  example: 5
-                },
-                errorRate: {
-                  type: 'string',
-                  description: 'Error rate percentage',
-                  example: '2.24%'
-                },
-                latencyMean: {
-                  type: 'number',
-                  description: 'Mean request latency in milliseconds',
-                  example: 523.45
-                }
+                fires: { type: 'integer', example: 1250 },
+                successes: { type: 'integer', example: 1220 },
+                failures: { type: 'integer', example: 25 },
+                rejects: { type: 'integer', example: 5 },
+                timeouts: { type: 'integer', example: 3 },
+                fallbacks: { type: 'integer', example: 5 },
+                errorRate: { type: 'string', example: '2.24%' },
+                latencyMean: { type: 'number', example: 523.45 }
               }
             },
             options: {
               type: 'object',
-              description: 'Circuit breaker configuration',
               properties: {
-                timeout: {
-                  type: 'integer',
-                  description: 'Request timeout in milliseconds',
-                  example: 30000
-                },
-                errorThresholdPercentage: {
-                  type: 'integer',
-                  description: 'Error threshold percentage to open circuit',
-                  example: 50
-                },
-                resetTimeout: {
-                  type: 'integer',
-                  description: 'Time in milliseconds before attempting to close circuit',
-                  example: 60000
-                },
-                volumeThreshold: {
-                  type: 'integer',
-                  description: 'Minimum requests before calculating error rate',
-                  example: 5
+                timeout: { type: 'integer', example: 30000 },
+                errorThresholdPercentage: { type: 'integer', example: 50 },
+                resetTimeout: { type: 'integer', example: 60000 },
+                volumeThreshold: { type: 'integer', example: 5 }
+              }
+            }
+          }
+        },
+        Address: {
+          type: 'object',
+          properties: {
+            line1: { type: 'string', example: 'Plot 12, Samora Avenue' },
+            line2: { type: 'string' },
+            city: { type: 'string', example: 'Dar es Salaam' },
+            region: { type: 'string', example: 'Dar es Salaam' },
+            country: { type: 'string', example: 'TZ', default: 'TZ' }
+          }
+        },
+        CreateTenantRequest: {
+          type: 'object',
+          required: ['tenantName', 'fspCode', 'fspName', 'contactPerson', 'contactEmail', 'contactPhone'],
+          example: API_EXAMPLES.createTenant,
+          properties: {
+            tenantId: { type: 'string', example: 'acme-fsp', description: 'Optional; auto-generated from fspCode if omitted' },
+            tenantName: { type: 'string', example: 'Acme Microfinance' },
+            fspCode: { type: 'string', example: 'ACME01', description: '2-20 uppercase alphanumeric; unique' },
+            fspName: { type: 'string', example: 'Acme Microfinance Ltd' },
+            contactPerson: { type: 'string', example: 'Jane Doe' },
+            contactEmail: { type: 'string', format: 'email', example: 'jane@acme.co.tz' },
+            contactPhone: { type: 'string', example: '+255712345678' },
+            organizationRegistrationNumber: { type: 'string' },
+            address: { $ref: '#/components/schemas/Address' },
+            subscription: {
+              type: 'object',
+              properties: {
+                plan: { type: 'string', enum: ['trial', 'standard', 'enterprise'], default: 'standard' },
+                monthlyLimit: { type: 'integer', example: 10000 }
+              }
+            }
+          }
+        },
+        UpdateTenantRequest: {
+          type: 'object',
+          example: API_EXAMPLES.updateTenant,
+          properties: {
+            tenantName: { type: 'string' },
+            fspCode: { type: 'string', description: 'Immutable after tenant is active' },
+            fspName: { type: 'string' },
+            contactPerson: { type: 'string' },
+            contactEmail: { type: 'string', format: 'email' },
+            contactPhone: { type: 'string' },
+            organizationRegistrationNumber: { type: 'string' },
+            address: { $ref: '#/components/schemas/Address' },
+            subscription: {
+              type: 'object',
+              properties: {
+                plan: { type: 'string', enum: ['trial', 'standard', 'enterprise'] },
+                monthlyLimit: { type: 'integer' }
+              }
+            }
+          }
+        },
+        PatchTenantStatusRequest: {
+          type: 'object',
+          required: ['status'],
+          example: API_EXAMPLES.patchStatusApproved,
+          properties: {
+            status: {
+              type: 'string',
+              enum: ['draft', 'submitted', 'under_review', 'approved', 'active', 'rejected', 'suspended', 'disabled']
+            },
+            reason: { type: 'string', example: 'Suspended for compliance review' }
+          }
+        },
+        MifosConfigRequest: {
+          type: 'object',
+          example: API_EXAMPLES.mifosConfigInherit,
+          properties: {
+            mode: { type: 'string', enum: ['inherit_default', 'override'], default: 'inherit_default' },
+            baseUrl: { type: 'string', format: 'uri', example: 'https://fineract.example.com/fineract-provider/api' },
+            tenantId: { type: 'string', example: 'zedone-uat', description: 'Fineract platform tenant id' },
+            makerUsername: { type: 'string' },
+            makerPassword: { type: 'string', format: 'password' },
+            checkerUsername: { type: 'string' },
+            checkerPassword: { type: 'string', format: 'password' },
+            callbackUrl: { type: 'string', format: 'uri' },
+            timeoutMs: { type: 'integer', example: 30000 }
+          }
+        },
+        CreateOnboardingDraftRequest: {
+          type: 'object',
+          required: ['tenantName', 'fspCode', 'contactEmail'],
+          example: API_EXAMPLES.createOnboardingDraft,
+          properties: {
+            tenantName: { type: 'string', example: 'Draft FSP' },
+            fspCode: { type: 'string', example: 'DRAFT01' },
+            contactEmail: { type: 'string', format: 'email', example: 'draft@fsp.co.tz' },
+            tenantId: { type: 'string', example: 'draft-fsp' }
+          }
+        },
+        UpdateOnboardingDraftRequest: {
+          type: 'object',
+          example: API_EXAMPLES.updateOnboardingDraft,
+          properties: {
+            companyInfo: { $ref: '#/components/schemas/CreateTenantRequest' },
+            mifosConfig: { $ref: '#/components/schemas/MifosConfigRequest' },
+            completedSteps: { type: 'array', items: { type: 'string' }, example: ['company', 'mifos'] }
+          }
+        },
+        ValidateFspCodeRequest: {
+          type: 'object',
+          required: ['fspCode'],
+          example: API_EXAMPLES.validateFspCode,
+          properties: {
+            fspCode: { type: 'string', example: 'NEWFSP01' }
+          }
+        },
+        ReviewDecisionRequest: {
+          type: 'object',
+          required: ['decision'],
+          example: API_EXAMPLES.reviewDecision,
+          properties: {
+            decision: { type: 'string', enum: ['approve', 'reject'] },
+            reason: { type: 'string', example: 'Incomplete documentation' }
+          }
+        },
+        CreateTenantUserRequest: {
+          type: 'object',
+          required: ['email', 'fullName', 'role'],
+          example: API_EXAMPLES.createTenantUser,
+          properties: {
+            email: { type: 'string', format: 'email', example: 'officer@fsp.co.tz' },
+            fullName: { type: 'string', example: 'Loan Officer' },
+            role: {
+              type: 'string',
+              enum: ['tenant_admin', 'operations_manager', 'finance_officer', 'support_staff']
+            },
+            username: { type: 'string' },
+            phone: { type: 'string' },
+            permissions: { type: 'array', items: { type: 'string' } }
+          }
+        },
+        UpdateTenantUserRequest: {
+          type: 'object',
+          example: API_EXAMPLES.updateTenantUser,
+          properties: {
+            role: { type: 'string', enum: ['tenant_admin', 'operations_manager', 'finance_officer', 'support_staff'] },
+            permissions: { type: 'array', items: { type: 'string' } },
+            isActive: { type: 'boolean' }
+          }
+        },
+        CreateApiKeyRequest: {
+          type: 'object',
+          required: ['name'],
+          example: API_EXAMPLES.createApiKey,
+          properties: {
+            name: { type: 'string', example: 'Production integration key' },
+            permissions: { type: 'array', items: { type: 'string' } },
+            expiresAt: { type: 'string', format: 'date-time', nullable: true },
+            ipWhitelist: { type: 'array', items: { type: 'string' } },
+            rateLimit: {
+              type: 'object',
+              properties: {
+                requestsPerMinute: { type: 'integer', example: 60 },
+                requestsPerHour: { type: 'integer', example: 1000 }
+              }
+            },
+            keyPrefix: { type: 'string', enum: ['mk_live', 'mk_test'], default: 'mk_live' }
+          }
+        },
+        TenantPublic: {
+          type: 'object',
+          properties: {
+            id: { type: 'string' },
+            tenantId: { type: 'string', example: 'acme-fsp' },
+            tenantName: { type: 'string' },
+            fspCode: { type: 'string', example: 'ACME01' },
+            fspName: { type: 'string' },
+            contactPerson: { type: 'string' },
+            contactEmail: { type: 'string' },
+            contactPhone: { type: 'string' },
+            status: { type: 'string', example: 'draft' },
+            mifosConfigured: { type: 'boolean' },
+            createdAt: { type: 'string', format: 'date-time' },
+            updatedAt: { type: 'string', format: 'date-time' }
+          }
+        },
+        ValidationErrorResponse: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: false },
+            message: { type: 'string', example: 'Validation failed' },
+            code: { type: 'string', example: 'VALIDATION_ERROR' },
+            errors: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  field: { type: 'string', example: 'fspCode' },
+                  message: { type: 'string' }
                 }
               }
             }
+          }
+        },
+        RefreshTokenRequest: {
+          type: 'object',
+          required: ['refreshToken'],
+          properties: {
+            refreshToken: { type: 'string', example: '9f373f09f62e9298b3f48406015dcb2a3d3c2df7606c4e7e89bef8146f23a7ecc9d520bbc6e4b015276019bb9b897d59d' }
+          }
+        },
+        SelectTenantRequest: {
+          type: 'object',
+          required: ['tenantId'],
+          properties: {
+            tenantId: { type: 'string', example: 'legacy-zedone' }
+          }
+        },
+        ApiKeyLoginRequest: {
+          type: 'object',
+          properties: {
+            apiKey: { type: 'string', example: 'mk_live_abc123...' },
+            apiSecret: { type: 'string', example: 'your-api-secret' }
           }
         }
       }
@@ -328,10 +499,43 @@ const options = {
       {
         name: 'Health & Monitoring',
         description: 'System health and monitoring'
+      },
+      {
+        name: 'Tenants',
+        description: 'FSP tenant CRUD and lifecycle'
+      },
+      {
+        name: 'Onboarding',
+        description: 'FSP onboarding workflow'
+      },
+      {
+        name: 'API Keys',
+        description: 'Tenant API key management'
+      },
+      {
+        name: 'Tenant Users',
+        description: 'Tenant user membership and roles'
+      },
+      {
+        name: 'Audit',
+        description: 'Tenant-scoped audit logs and statistics (M3)'
+      },
+      {
+        name: 'Products',
+        description: 'Tenant-scoped loan product management (M3)'
+      },
+      {
+        name: 'Users',
+        description: 'Platform user management (M3)'
+      },
+      {
+        name: 'MIFOS Admin',
+        description: 'MIFOS/CBS health, auth, and diagnostics (M3)'
       }
     ]
   },
   apis: [
+    './server.js',
     './src/routes/*.js',
     './src/controllers/*.js',
     './src/models/*.js'

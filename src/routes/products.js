@@ -75,6 +75,197 @@ const productWriteGuards = [
 ];
 
 /**
+ * @swagger
+ * /api/v1/products:
+ *   get:
+ *     summary: List loan products
+ *     description: Tenant-scoped product list (M3). Super-admin without tenant sees all products.
+ *     tags: [Products]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: active
+ *         schema: { type: boolean }
+ *       - in: query
+ *         name: limit
+ *         schema: { type: integer, default: 100 }
+ *       - in: query
+ *         name: offset
+ *         schema: { type: integer, default: 0 }
+ *     responses:
+ *       200:
+ *         description: Paginated products
+ *   post:
+ *     summary: Create loan product
+ *     description: Requires tenant:update permission. New products tagged with active tenantId.
+ *     tags: [Products]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [productCode, productName, minTenure, maxTenure, interestRate, minAmount, maxAmount]
+ *             properties:
+ *               productCode: { type: string }
+ *               deductionCode: { type: string }
+ *               productName: { type: string }
+ *               productDescription: { type: string }
+ *               minTenure: { type: integer }
+ *               maxTenure: { type: integer }
+ *               interestRate: { type: number }
+ *               processingFee: { type: number }
+ *               insurance: { type: number }
+ *               minAmount: { type: number }
+ *               maxAmount: { type: number }
+ *               repaymentType: { type: string }
+ *               currency: { type: string, default: TZS }
+ *               termsConditions: { type: array, items: { type: object } }
+ *               mifosProductId: { type: string }
+ *     responses:
+ *       201:
+ *         description: Product created
+ */
+/**
+ * @swagger
+ * /api/v1/products/import-csv:
+ *   post:
+ *     summary: Import products from CSV
+ *     description: Bulk import; new products tagged with tenantId (M3).
+ *     tags: [Products]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               file:
+ *                 type: string
+ *                 format: binary
+ *     responses:
+ *       200:
+ *         description: Import result
+ */
+/**
+ * @swagger
+ * /api/v1/products/sync-to-utumishi:
+ *   post:
+ *     summary: Sync products to Utumishi
+ *     description: Builds PRODUCT_DETAIL message for all active tenant products.
+ *     tags: [Products]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Sync preview or result
+ */
+/**
+ * @swagger
+ * /api/v1/products/{id}:
+ *   get:
+ *     summary: Get product by ID
+ *     description: Returns 404 if product belongs to another tenant.
+ *     tags: [Products]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Product details
+ *       404:
+ *         description: Not found
+ *   put:
+ *     summary: Update product
+ *     tags: [Products]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *     responses:
+ *       200:
+ *         description: Product updated
+ *   delete:
+ *     summary: Delete product
+ *     tags: [Products]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Product deleted
+ */
+/**
+ * @swagger
+ * /api/v1/products/{id}/terms-csv:
+ *   post:
+ *     summary: Upload terms and conditions CSV
+ *     tags: [Products]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               file:
+ *                 type: string
+ *                 format: binary
+ *     responses:
+ *       200:
+ *         description: Terms uploaded
+ */
+/**
+ * @swagger
+ * /api/v1/products/{id}/terms-csv/template:
+ *   get:
+ *     summary: Download terms CSV template
+ *     tags: [Products]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: CSV template file
+ *         content:
+ *           text/csv:
+ *             schema:
+ *               type: string
+ */
+
+/**
  * GET /api/v1/products
  * List all products
  */

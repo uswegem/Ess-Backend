@@ -50,6 +50,25 @@ delete require.cache[require.resolve('./src/services/loanService')];
 
 const app = express();
 
+/**
+ * @swagger
+ * /health:
+ *   get:
+ *     summary: Platform health check
+ *     description: No authentication required (M3).
+ *     tags: [Health & Monitoring]
+ *     responses:
+ *       200:
+ *         description: Service healthy
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status: { type: string, example: healthy }
+ *                 time: { type: string, format: date-time }
+ *                 uptime: { type: number }
+ */
 // Health check endpoint
 app.get('/health', (req, res) => {
     res.status(200).json({ 
@@ -234,6 +253,21 @@ app.get('/api-docs.json', (req, res) => {
     res.send(swaggerSpec);
 });
 
+/**
+ * @swagger
+ * /metrics:
+ *   get:
+ *     summary: Prometheus metrics
+ *     description: Platform metrics endpoint for monitoring (M3).
+ *     tags: [Health & Monitoring]
+ *     responses:
+ *       200:
+ *         description: Prometheus text format metrics
+ *         content:
+ *           text/plain:
+ *             schema:
+ *               type: string
+ */
 // Metrics endpoint (no auth required for monitoring)
 app.get('/metrics', metricsHandler);
 
@@ -262,8 +296,12 @@ app.use('/api/v1', adminCompatRoutes);
 const productRoutes = require('./src/routes/products');
 app.use('/api/v1/products', productRoutes);
 
-// API key management routes
+// Tenant, onboarding, and API key management routes
+const tenantRoutes = require('./src/routes/tenants');
+const onboardingRoutes = require('./src/routes/onboarding');
 const apiKeyRoutes = require('./src/routes/apiKeys');
+app.use('/api/v1/tenants', tenantRoutes);
+app.use('/api/v1/onboarding', onboardingRoutes);
 app.use('/api/v1/tenants/:tenantId/api-keys', apiKeyRoutes);
 
 // Loan action routes for manual notifications (protected)

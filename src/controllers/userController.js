@@ -1,11 +1,13 @@
 const logger = require('../utils/logger');
 const User = require('../models/User');
+const TenantUser = require('../models/TenantUser');
 const AuditLog = require('../models/AuditLog');
+const { createTenantUser } = require('../services/tenantUserService');
 
 class UserController {
   static async createUser(req, res) {
     try {
-      const { username, email, password, role, fullName, phone } = req.body;
+      const { username, email, password, role, fullName, phone, tenantId, tenantRole } = req.body;
 
       // Check if user already exists
       const existingUser = await User.findOne({
@@ -39,14 +41,26 @@ class UserController {
 
       await newUser.save();
 
+      const resolvedTenantId = tenantId || req.tenant?.tenantId;
+      if (resolvedTenantId && tenantRole) {
+        await createTenantUser(resolvedTenantId, {
+          email: newUser.email,
+          fullName: newUser.fullName,
+          role: tenantRole,
+          username: newUser.username,
+          phone: newUser.phone
+        }, req.user._id);
+      }
+
       await AuditLog.create({
         action: 'create_user',
         description: `User ${req.user.username} created new user: ${username} with role: ${newUser.role}`,
         userId: req.user._id,
+        tenantId: resolvedTenantId,
         userAgent: req.get('User-Agent'),
         ipAddress: req.ip,
         status: 'success',
-        metadata: { createdUserId: newUser._id, role: newUser.role }
+        metadata: { createdUserId: newUser._id, role: newUser.role, tenantRole }
       });
 
       res.status(201).json({
@@ -70,14 +84,20 @@ class UserController {
       const limit = parseInt(req.query.limit) || 10;
       const skip = (page - 1) * limit;
 
-      const users = await User.find()
+      let filter = {};
+      if (req.tenant?.tenantId && !req.authContext?.isSuperAdmin && req.user?.role !== 'admin') {
+        const memberships = await TenantUser.find({ tenantId: req.tenant.tenantId, isActive: true }).select('userId');
+        filter._id = { $in: memberships.map((m) => m.userId) };
+      }
+
+      const users = await User.find(filter)
         .select('-password')
         .populate('createdBy', 'username fullName')
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit);
 
-      const total = await User.countDocuments();
+      const total = await User.countDocuments(filter);
 
       res.json({
         success: true,
