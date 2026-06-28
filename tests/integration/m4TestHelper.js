@@ -3,6 +3,7 @@ const authRoutes = require('../../src/routes/auth');
 const tenantRoutes = require('../../src/routes/tenants');
 const onboardingRoutes = require('../../src/routes/onboarding');
 const apiKeyRoutes = require('../../src/routes/apiKeys');
+const dashboardRoutes = require('../../src/routes/dashboard');
 const { correlationMiddleware } = require('../../src/middleware/correlationMiddleware');
 const { attachTenantToRequest } = require('../../src/middleware/tenantMiddleware');
 const { auditMiddleware } = require('../../src/middleware/authMiddleware');
@@ -17,7 +18,12 @@ function buildM4TestApp() {
   app.use('/api/v1/tenants', tenantRoutes);
   app.use('/api/v1/onboarding', onboardingRoutes);
   app.use('/api/v1/tenants/:tenantId/api-keys', apiKeyRoutes);
+  app.use('/api/v1/dashboard', dashboardRoutes);
   return app;
+}
+
+function buildM5TestApp() {
+  return buildM4TestApp();
 }
 
 async function loginSuperAdmin(app, username = 'superadmin', password = 'TestPassword123!') {
@@ -27,4 +33,4 @@ async function loginSuperAdmin(app, username = 'superadmin', password = 'TestPas
   return response.body.data?.token;
 }
 
-module.exports = { buildM4TestApp, loginSuperAdmin };
+module.exports = { buildM4TestApp, buildM5TestApp, loginSuperAdmin };

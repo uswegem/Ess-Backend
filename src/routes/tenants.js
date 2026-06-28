@@ -3,6 +3,8 @@ const router = express.Router();
 const TenantController = require('../controllers/tenantController');
 const TenantUserController = require('../controllers/tenantUserController');
 const AuditController = require('../controllers/auditController');
+const TenantCertificateController = require('../controllers/tenantCertificateController');
+const multer = require('multer');
 const { authMiddleware, roleMiddleware, permissionMiddleware } = require('../middleware/authMiddleware');
 const { validateBody, validateQuery } = require('../middleware/validateMiddleware');
 const {
@@ -17,6 +19,11 @@ const {
 } = require('../validations/tenantSchemas');
 
 const platformRoles = roleMiddleware(['super_admin', 'admin']);
+
+const certUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 2 * 1024 * 1024 }
+});
 
 /**
  * @swagger
@@ -357,5 +364,19 @@ router.post('/:tenantId/users', authMiddleware, permissionMiddleware('users:mana
  */
 router.put('/:tenantId/users/:userId', authMiddleware, permissionMiddleware('users:manage'), validateBody(updateTenantUserSchema), TenantUserController.update);
 router.delete('/:tenantId/users/:userId', authMiddleware, permissionMiddleware('users:manage'), TenantUserController.remove);
+
+router.get('/:tenantId/certificates', authMiddleware, permissionMiddleware('tenant:read'), TenantCertificateController.getCertificates);
+router.post(
+  '/:tenantId/certificates',
+  authMiddleware,
+  permissionMiddleware('tenant:update'),
+  certUpload.fields([
+    { name: 'publicCert', maxCount: 1 },
+    { name: 'privateKey', maxCount: 1 },
+    { name: 'caCert', maxCount: 1 }
+  ]),
+  TenantCertificateController.uploadCertificates
+);
+router.delete('/:tenantId/certificates', authMiddleware, permissionMiddleware('tenant:update'), TenantCertificateController.deleteCertificates);
 
 module.exports = router;

@@ -1,6 +1,9 @@
 # Node modules
 node_modules/
 
+# Tenant certificate uploads (M5)
+uploads/
+
 # Logs
 logs/
 *.log

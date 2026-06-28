@@ -289,6 +289,10 @@ app.use('/api/v1/users', userRoutes);
 // Audit routes (protected)
 app.use('/api/v1/audit', auditRoutes);
 
+// Dashboard routes (M5)
+const dashboardRoutes = require('./src/routes/dashboard');
+app.use('/api/v1/dashboard', dashboardRoutes);
+
 // Admin compatibility routes for MiraAdmin frontend
 app.use('/api/v1', adminCompatRoutes);
 
