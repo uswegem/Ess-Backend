@@ -12,7 +12,7 @@ const digitalSignature = require('./src/utils/digitalSignature');
 const LOAN_CONSTANTS = require('./src/utils/loanConstants');
 
 // Configuration
-const CALLBACK_URL = process.env.THIRD_PARTY_BASE_URL || 'http://154.118.230.140:9802/ess-loans/mvtyztwq/consume';
+const CALLBACK_URL = process.env.UTUMISHI_ENDPOINT || process.env.THIRD_PARTY_BASE_URL || 'http://154.118.230.140:9802/ess-loans/mvtyztwq/consume';
 const FSP_NAME = process.env.FSP_NAME || 'ZE DONE';
 
 async function sendTopUpCallback() {

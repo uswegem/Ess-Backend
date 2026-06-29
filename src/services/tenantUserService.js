@@ -49,20 +49,25 @@ async function listTenantUsers(tenantId, { page = 1, limit = 20 } = {}) {
   };
 }
 
+function generateTemporaryPassword() {
+  return `Tmp${Math.random().toString(36).slice(2, 10)}!`;
+}
+
 async function createTenantUser(tenantId, payload, invitedBy) {
   const tenant = await getTenantById(tenantId);
 
+  let temporaryPassword = null;
   let user = await User.findOne({ email: payload.email.toLowerCase() });
   if (!user) {
     const username = payload.username || payload.email.split('@')[0].toLowerCase();
     const existingUsername = await User.findOne({ username });
     const finalUsername = existingUsername ? `${username}-${Date.now()}` : username;
-    const tempPassword = `Tmp${Math.random().toString(36).slice(2, 10)}!`;
+    temporaryPassword = generateTemporaryPassword();
 
     user = await User.create({
       username: finalUsername,
       email: payload.email.toLowerCase(),
-      password: tempPassword,
+      password: temporaryPassword,
       fullName: payload.fullName,
       phone: payload.phone,
       role: 'user',
@@ -88,7 +93,21 @@ async function createTenantUser(tenantId, payload, invitedBy) {
   });
 
   await membership.populate('userId', 'username email fullName phone isActive');
-  return membership;
+
+  const credentials = temporaryPassword
+    ? {
+        username: user.username,
+        email: user.email,
+        temporaryPassword,
+        isNewAccount: true
+      }
+    : {
+        username: user.username,
+        email: user.email,
+        isNewAccount: false
+      };
+
+  return { membership, credentials };
 }
 
 async function updateTenantUser(tenantId, userId, payload) {

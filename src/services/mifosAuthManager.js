@@ -5,6 +5,7 @@ const {
   getTokenForTenant,
   useTenantMifos
 } = require('./mifosTenantClient');
+const { getCbsTimeoutMs } = require('../config/runtimeEnv');
 
 /**
  * Enhanced MIFOS Authentication Manager
@@ -101,7 +102,7 @@ class MifosAuthManager {
                         'Content-Type': 'application/json',
                         'fineract-platform-tenantid': fineractTenant
                     },
-                    timeout: effective?.timeoutMs || 10000
+                    timeout: effective?.timeoutMs || getCbsTimeoutMs()
                 }
             );
 

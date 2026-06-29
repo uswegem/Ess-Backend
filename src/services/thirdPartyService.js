@@ -2,9 +2,9 @@ const logger = require('../utils/logger');
 const axios = require('axios');
 const digitalSignature = require('../utils/signatureUtils');
 const { logOutgoingMessage, updateMessageLog } = require('../utils/messageLogger');
+const { getUtumishiEndpoint, getApiTimeoutMs } = require('../config/runtimeEnv');
 
-const THIRD_PARTY_BASE_URL = process.env.THIRD_PARTY_BASE_URL;
-const API_TIMEOUT = parseInt(process.env.API_TIMEOUT) || 30000;
+const API_TIMEOUT = getApiTimeoutMs();
 
 async function forwardToThirdParty(signedXml, messageType, metadata = {}, userId = null) {
   let messageLog = null;
@@ -15,25 +15,22 @@ async function forwardToThirdParty(signedXml, messageType, metadata = {}, userId
     // Log the outgoing message
     messageLog = await logOutgoingMessage(signedXml, messageType, metadata, userId);
     
-    // Check if URL is configured
-    if (!THIRD_PARTY_BASE_URL) {
-      throw new Error('THIRD_PARTY_BASE_URL environment variable is not set');
-    }
+    const essUrl = getUtumishiEndpoint({ required: true });
 
     // Validate URL format
     try {
-      new URL(THIRD_PARTY_BASE_URL);
+      new URL(essUrl);
     } catch (urlError) {
-      throw new Error(`Invalid THIRD_PARTY_BASE_URL: ${THIRD_PARTY_BASE_URL}`);
+      throw new Error(`Invalid UTUMISHI_ENDPOINT: ${essUrl}`);
     }
 
-    logger.info('Target ESS URL:', THIRD_PARTY_BASE_URL);
+    logger.info('Target ESS URL:', essUrl);
     logger.info('Message Type:', messageType);
     logger.info('Signed XML Size:', signedXml.length, 'characters');
 
     const config = {
       method: 'post',
-      url: THIRD_PARTY_BASE_URL,
+      url: essUrl,
       data: signedXml,
       headers: {
         'Content-Type': 'application/xml',
@@ -91,7 +88,7 @@ async function forwardToThirdParty(signedXml, messageType, metadata = {}, userId
     if (error.code === 'ENOTFOUND') {
       throw new Error(`Cannot connect to ESS: ${error.hostname} not found`);
     } else if (error.code === 'ECONNREFUSED') {
-      throw new Error(`ESS connection refused: ${THIRD_PARTY_BASE_URL}`);
+      throw new Error(`ESS connection refused: ${essUrl}`);
     } else if (error.response) {
       // ESS responded with error status
       logger.info('ESS Error Response Details:', {

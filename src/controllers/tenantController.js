@@ -11,11 +11,11 @@ const {
   toPublicTenant,
   TenantServiceError
 } = require('../services/tenantService');
-const { saveMifosConfig, validateMifosConfig } = require('../services/mifosConfigService');
+const { saveMifosConfig, validateMifosConfig, MifosConfigError } = require('../services/mifosConfigService');
 const { getEffectiveConfig } = require('../services/mifosTenantClient');
 
 function handleServiceError(res, error) {
-  if (error instanceof TenantServiceError) {
+  if (error instanceof TenantServiceError || error instanceof MifosConfigError) {
     return sendError(res, error.statusCode, error.message, { code: error.code });
   }
   logger.error('Tenant controller error:', error);

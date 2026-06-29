@@ -1,5 +1,6 @@
 const axios = require('axios');
 const Tenant = require('../models/Tenant');
+const { getCbsTimeoutMs } = require('../config/runtimeEnv');
 
 function getPlatformMifosConfig() {
   return {
@@ -10,7 +11,7 @@ function getPlatformMifosConfig() {
     makerPassword: process.env.CBS_MAKER_PASSWORD,
     checkerUsername: process.env.CBS_CHECKER_USERNAME,
     checkerPassword: process.env.CBS_CHECKER_PASSWORD,
-    timeoutMs: parseInt(process.env.CBS_TIMEOUT_MS || '30000', 10)
+    timeoutMs: getCbsTimeoutMs()
   };
 }
 
@@ -71,6 +72,16 @@ async function fetchToken(config, userType = 'maker') {
   return response.data.base64EncodedAuthenticationKey;
 }
 
+function formatMifosAuthError(error) {
+  if (error.response?.status === 401) {
+    return 'MIFOS authentication failed (401). Verify CBS maker/checker username and password.';
+  }
+  if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {
+    return `Cannot reach MIFOS at ${error.config?.url || 'configured base URL'}`;
+  }
+  return error.message || 'MIFOS authentication failed';
+}
+
 async function getTokenForTenant(tenant, userType = 'maker') {
   const tenantKey = tenant?.tenantId || 'platform';
   const key = cacheKey(tenantKey, userType);
@@ -80,7 +91,12 @@ async function getTokenForTenant(tenant, userType = 'maker') {
   }
 
   const config = getEffectiveConfig(tenant);
-  const token = await fetchToken(config, userType);
+  let token;
+  try {
+    token = await fetchToken(config, userType);
+  } catch (error) {
+    throw new Error(formatMifosAuthError(error));
+  }
   tokenCache.set(key, { token, expiresAt: Date.now() + 12 * 60 * 60 * 1000 });
   return token;
 }

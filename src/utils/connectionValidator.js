@@ -1,13 +1,14 @@
 const axios = require('axios');
 const https = require('https');
 const logger = require('./logger');
+const { getUtumishiEndpoint } = require('../config/runtimeEnv');
 
 /**
  * Utility for ensuring Utumishi connectivity before making requests
  */
 class ConnectionValidator {
   constructor() {
-    this.utumishiEndpoint = process.env.UTUMISHI_ENDPOINT || 'https://154.118.230.140';
+    this.utumishiEndpoint = getUtumishiEndpoint() || 'https://154.118.230.140';
     this.timeout = 5000; // 5 seconds
     this.maxRetries = 2;
     

@@ -9,6 +9,9 @@ const mifosTenantClient = require('./mifosTenantClient');
 const { useTenantMifos, clearTenantTokenCache } = mifosTenantClient;
 const authManager = require('./mifosAuthManager');
 const { createMifosCircuitBreaker, getCircuitBreakerHealth } = require('../config/circuitBreaker');
+const { getCbsTimeoutMs } = require('../config/runtimeEnv');
+
+const CBS_TIMEOUT_MS = getCbsTimeoutMs();
 
 const tenantDocCache = new Map();
 
@@ -69,8 +72,8 @@ const CBS_Tenant = process.env.CBS_Tenant;
 const httpsAgent = new https.Agent({
   keepAlive: true,
   maxSockets: 10,
-  timeout: 60000,
-  freeSocketTimeout: 30000
+  timeout: CBS_TIMEOUT_MS * 2,
+  freeSocketTimeout: CBS_TIMEOUT_MS
 });
 
 // Circuit breaker instances for different API clients
@@ -79,7 +82,7 @@ let checkerCircuitBreaker = null;
 
 const maker = axios.create({
   baseURL: process.env.CBS_BASE_URL,
-  timeout: 60000,
+  timeout: CBS_TIMEOUT_MS,
   httpsAgent,
   headers: {
     'Content-Type': 'application/json',
@@ -166,7 +169,7 @@ maker.interceptors.response.use(
 
 const checker = axios.create({
   baseURL: process.env.CBS_BASE_URL,
-  timeout: 60000,
+  timeout: CBS_TIMEOUT_MS,
   httpsAgent,
   headers: {
     'Content-Type': 'application/json',

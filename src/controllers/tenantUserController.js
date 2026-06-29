@@ -30,19 +30,28 @@ class TenantUserController {
 
   static async create(req, res) {
     try {
-      const membership = await createTenantUser(req.params.tenantId, req.body, req.user?._id);
+      const { membership, credentials } = await createTenantUser(
+        req.params.tenantId,
+        req.body,
+        req.user?._id
+      );
       await AuditLog.create({
         action: 'tenant_user_create',
         description: `User added to tenant ${req.params.tenantId}`,
         userId: req.user?._id,
         tenantId: req.params.tenantId,
         status: 'success',
-        metadata: { targetUserId: membership.userId }
+        metadata: { targetUserId: membership.userId, isNewAccount: credentials.isNewAccount }
       });
       return sendSuccess(res, {
         status: 201,
-        message: 'Tenant user created',
-        data: { user: toPublicTenantUser(membership) }
+        message: credentials.isNewAccount
+          ? 'Tenant user created. Share the one-time credentials with the user.'
+          : 'Existing user added to tenant.',
+        data: {
+          user: toPublicTenantUser(membership),
+          credentials
+        }
       });
     } catch (error) {
       return handleError(res, error);

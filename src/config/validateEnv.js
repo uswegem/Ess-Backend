@@ -25,7 +25,6 @@ const optionalEnvVars = [
   'NODE_ENV',
   'PORT',
   'LOG_LEVEL',
-  'THIRD_PARTY_BASE_URL',
   'ESS_CALLBACK_URL',
   'JWT_EXPIRES_IN',
   'JWT_ACCESS_EXPIRES_IN',
@@ -35,7 +34,10 @@ const optionalEnvVars = [
   'STRONGSWAN_CONF_PATH',
   'TENANT_SECRET_ENCRYPTION_KEY',
   'LEGACY_TENANT_ID',
-  'TENANT_ENFORCEMENT'
+  'TENANT_ENFORCEMENT',
+  'CBS_TIMEOUT_MS',
+  'API_TIMEOUT',
+  'SKIP_MIFOS_ACTIVATION_CHECK'
 ];
 
 /**
@@ -125,6 +127,10 @@ function validateEnvPatterns() {
 
   if (process.env.TENANT_ENFORCEMENT === undefined) {
     process.env.TENANT_ENFORCEMENT = process.env.NODE_ENV === 'production' ? 'true' : 'false';
+  }
+
+  if (process.env.THIRD_PARTY_BASE_URL && !process.env.UTUMISHI_ENDPOINT) {
+    logger.warn('⚠️ THIRD_PARTY_BASE_URL is deprecated — set UTUMISHI_ENDPOINT instead');
   }
 }
 

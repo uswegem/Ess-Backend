@@ -6,7 +6,7 @@ const axios = require('axios');
 
 // Remote server configuration
 const REMOTE_SERVER = {
-    ESS_URL: process.env.THIRD_PARTY_BASE_URL || 'http://154.118.230.140:9802/ess-loans/mvtyztwq/consume',
+    ESS_URL: process.env.UTUMISHI_ENDPOINT || process.env.THIRD_PARTY_BASE_URL || 'http://154.118.230.140:9802/ess-loans/mvtyztwq/consume',
     TIMEOUT: process.env.API_TIMEOUT || 30000
 };
 

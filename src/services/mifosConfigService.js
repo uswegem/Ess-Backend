@@ -67,9 +67,15 @@ async function validateMifosConfig(tenant) {
 }
 
 async function assertReadyForActivation(tenant) {
+  if (process.env.SKIP_MIFOS_ACTIVATION_CHECK === 'true') {
+    return true;
+  }
+
   const result = await validateMifosConfig(tenant);
   if (!result.valid) {
-    throw new MifosConfigError(result.message || 'MIFOS configuration is not valid');
+    throw new MifosConfigError(
+      result.message || 'MIFOS configuration is not valid. Cannot activate tenant until CBS credentials are verified.'
+    );
   }
   return true;
 }

@@ -23,6 +23,7 @@
 require('dotenv').config();
 
 const mongoose = require('mongoose');
+const { getCbsTimeoutMs } = require('../src/config/runtimeEnv');
 
 const BATCH_SIZE = 500;
 const LEGACY_TENANT_ID = process.env.LEGACY_TENANT_ID || 'legacy-zedone';
@@ -82,7 +83,7 @@ class MultiTenancyMigration {
         checkerUsername: process.env.CBS_CHECKER_USERNAME,
         checkerPasswordEncrypted: process.env.CBS_CHECKER_PASSWORD,
         isConfigured: Boolean(process.env.CBS_BASE_URL),
-        timeoutMs: Number(process.env.CBS_TIMEOUT || 30000)
+        timeoutMs: getCbsTimeoutMs()
       },
       metadata: {
         notes: 'Auto-created by migrate-to-multitenancy.js for existing single-tenant data'

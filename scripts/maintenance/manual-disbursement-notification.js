@@ -65,7 +65,7 @@ async function sendDisbursementNotification() {
         console.log('='.repeat(60));
         
         // Get callback URL from environment (same as used in callbackUtils.js)
-        const callbackUrl = process.env.THIRD_PARTY_BASE_URL || process.env.ESS_CALLBACK_URL || 'http://localhost:3000/api/callback';
+        const callbackUrl = process.env.UTUMISHI_ENDPOINT || process.env.THIRD_PARTY_BASE_URL || process.env.ESS_CALLBACK_URL || 'http://localhost:3000/api/callback';
         
         console.log(`\n📡 Sending to: ${callbackUrl}`);
         

@@ -45,6 +45,9 @@ describe('Tenant users integration', () => {
 
     expect(create.status).toBe(201);
     expect(create.body.data.user.role).toBe('finance_officer');
+    expect(create.body.data.credentials.isNewAccount).toBe(true);
+    expect(create.body.data.credentials.username).toBeTruthy();
+    expect(create.body.data.credentials.temporaryPassword).toMatch(/^Tmp.+!$/);
 
     const list = await request(app)
       .get(`/api/v1/tenants/${tenant.tenantId}/users`)

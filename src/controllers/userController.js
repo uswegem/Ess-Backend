@@ -43,13 +43,17 @@ class UserController {
 
       const resolvedTenantId = tenantId || req.tenant?.tenantId;
       if (resolvedTenantId && tenantRole) {
-        await createTenantUser(resolvedTenantId, {
-          email: newUser.email,
-          fullName: newUser.fullName,
-          role: tenantRole,
-          username: newUser.username,
-          phone: newUser.phone
-        }, req.user._id);
+        await createTenantUser(
+          resolvedTenantId,
+          {
+            email: newUser.email,
+            fullName: newUser.fullName,
+            role: tenantRole,
+            username: newUser.username,
+            phone: newUser.phone
+          },
+          req.user._id
+        );
       }
 
       await AuditLog.create({

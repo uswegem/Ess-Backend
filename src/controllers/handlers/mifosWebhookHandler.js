@@ -5,6 +5,7 @@ const LoanMapping = require('../../models/LoanMapping');
 const { AuditLog } = require('../../models/AuditLog');
 const { getMessageId } = require('../../utils/messageIdGenerator');
 const pdfGeneratorService = require('../../services/pdfGeneratorService');
+const { getUtumishiEndpoint } = require('../../config/runtimeEnv');
 
 const handleMifosWebhook = async (req, res) => {
     try {
@@ -162,7 +163,7 @@ async function sendLoanInitialApprovalNotification(loanMapping) {
             return { status: 200, data: { success: true, message: 'Test mode - notification skipped' } };
         }
 
-        const callbackUrl = process.env.ESS_CALLBACK_URL || 'http://localhost:3001/api/loan';
+        const callbackUrl = getUtumishiEndpoint({ required: true });
         
         const originalMessage = loanMapping.pendingCallback?.originalMessage || {};
         const header = originalMessage.Header || {};

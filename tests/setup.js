@@ -15,6 +15,7 @@ beforeAll(async () => {
   process.env.CBS_BASE_URL = process.env.CBS_BASE_URL || 'https://mifos.test.example/api';
   process.env.CBS_Tenant = process.env.CBS_Tenant || 'test-tenant';
   process.env.USE_TENANT_MIFOS = process.env.USE_TENANT_MIFOS || 'true';
+  process.env.UTUMISHI_ENDPOINT = process.env.UTUMISHI_ENDPOINT || 'http://localhost:9999/utumishi/mock';
 
   // Start in-memory MongoDB server for tests
   mongoServer = await MongoMemoryServer.create();

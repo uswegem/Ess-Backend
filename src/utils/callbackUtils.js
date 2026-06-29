@@ -1,4 +1,5 @@
 const logger = require('./logger');
+const { getUtumishiEndpoint, getApiTimeoutMs } = require('../config/runtimeEnv');
 
 const express = require('express');
 const router = express.Router();
@@ -23,10 +24,7 @@ async function sendCallback(callbackData) {
             logger.info(`📤 Attempt ${retryCount + 1}/${MAX_RETRIES} to send callback`);
         
         // Get callback URL from environment variables
-        const callbackUrl = process.env.THIRD_PARTY_BASE_URL || process.env.ESS_CALLBACK_URL || 'http://localhost:3000/api/callback';
-        if (!callbackUrl) {
-            throw new Error('THIRD_PARTY_BASE_URL is not configured in environment');
-        }
+        const callbackUrl = getUtumishiEndpoint({ required: true });
 
         logger.info('📤 Sending callback:', {
             url: callbackUrl,
@@ -44,7 +42,7 @@ async function sendCallback(callbackData) {
                 'X-Request-ID': `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
             },
             data: signedCallback,
-            timeout: parseInt(process.env.API_TIMEOUT) || 30000,
+            timeout: getApiTimeoutMs(),
             validateStatus: function (status) {
                 return status >= 200 && status < 500; // Accept all responses to log them
             }
