@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const AuditLog = require('../models/AuditLog');
 const TenantUser = require('../models/TenantUser');
 const logger = require('../utils/logger');
+const { buildEssLoanSummary } = require('../utils/essLoanSummary');
 
 function resolveTenantFilter(req) {
   if (req.query.tenantId) {
@@ -33,7 +34,13 @@ class DashboardController {
       const db = mongoose.connection.db;
       const loanMatch = { ...tenantFilter };
 
-      const [totalLoans, loansByStatus, tenantUserCount, dailyApplications] = await Promise.all([
+      const MessageLog = require('../models/MessageLog');
+      const messageMatch = {
+        status: { $in: ['pending', 'failed'] },
+        ...tenantFilter,
+      };
+
+      const [totalLoans, loansByStatus, tenantUserCount, dailyApplications, pendingMessages] = await Promise.all([
         db.collection('loanmappings').countDocuments(loanMatch),
         db.collection('loanmappings').aggregate([
           { $match: loanMatch },
@@ -56,7 +63,8 @@ class DashboardController {
             },
             { $sort: { _id: 1 } }
           ]).toArray();
-        })()
+        })(),
+        MessageLog.countDocuments(messageMatch).catch(() => 0),
       ]);
 
       const successful = loansByStatus.find((s) => s._id === 'DISBURSED' || s._id === 'OFFER_SUBMITTED')?.count || 0;
@@ -72,7 +80,7 @@ class DashboardController {
             totalLoans,
             totalUsers: tenantUserCount,
             successRate,
-            pendingMessages: 0
+            pendingMessages
           },
           loanStatistics: {
             byStatus: loansByStatus.map((item) => ({
@@ -80,6 +88,7 @@ class DashboardController {
               count: item.count,
               totalAmount: item.totalAmount || 0
             })),
+            essSummary: buildEssLoanSummary(loansByStatus),
             dailyApplications: dailyApplications.map((item) => ({
               date: item._id,
               applications: item.count,
@@ -136,9 +145,10 @@ class DashboardController {
   static async messages(req, res) {
     try {
       const MessageLog = require('../models/MessageLog');
-      let filter = { status: { $in: ['PENDING', 'AWAITING_RESPONSE'] } };
-      if (req.tenant?.tenantId) {
-        filter.tenantId = req.tenant.tenantId;
+      const tenantFilter = resolveTenantFilter(req);
+      const filter = { status: { $in: ['pending', 'failed'] } };
+      if (tenantFilter?.tenantId) {
+        filter.tenantId = tenantFilter.tenantId;
       }
 
       let count = 0;

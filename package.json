@@ -11,7 +11,7 @@
     "test:integration": "jest --runInBand --forceExit tests/integration --passWithNoTests",
     "test:m3": "jest --runInBand --forceExit src/models/__tests__ src/middleware/__tests__ tests/integration/tenantIsolation.test.js tests/integration/auth.test.js",
     "test:m4": "jest --runInBand --forceExit tests/integration/tenantCrud.test.js tests/integration/onboardingWorkflow.test.js tests/integration/tenantUsers.test.js tests/integration/apiKeysHttp.test.js tests/integration/mifosTenantConfig.test.js",
-    "test:m5": "jest --runInBand --forceExit tests/integration/dashboard.test.js",
+    "test:m5": "jest --runInBand --forceExit tests/integration/dashboard.test.js src/services/__tests__/productResolver.test.js src/utils/__tests__/essLoanSummary.test.js",
     "docs:postman-m4": "node \"../client documents/generate-m4-postman.js\"",
     "docs:export-openapi": "node scripts/export-openapi.js",
     "test:all": "jest --runInBand --forceExit --passWithNoTests",

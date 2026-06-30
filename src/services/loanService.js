@@ -13,6 +13,8 @@ const {
   ApplicationException,
   LOAN_CONSTANTS
 } = require("../utils/loanUtils");
+const { resolveMifosProductId } = require('./productResolver');
+const { getActiveTenantContext } = require('../utils/tenantContext');
 
 // Enhanced CBS services
 const { authManager, healthMonitor, errorHandler, requestManager } = api;
@@ -44,9 +46,17 @@ async function getClientLoans(clientId) {
     }
 }
 
+async function fetchMifosProduct(productCode) {
+    const tenantId = getActiveTenantContext()?.tenantId || null;
+    const mifosProductId = await resolveMifosProductId(productCode, tenantId);
+    return api.get(`${API_ENDPOINTS.PRODUCT}/${mifosProductId}`);
+}
+
 async function getProductDetails(productCode) {
     try {
-        const response = await api.get(`/v1/loanproducts/${productCode}`);
+        const tenantId = getActiveTenantContext()?.tenantId || null;
+        const mifosProductId = await resolveMifosProductId(productCode, tenantId);
+        const response = await api.get(`/v1/loanproducts/${mifosProductId}`);
         if (response.status && response.response) {
             return response.response;
         }
@@ -664,7 +674,7 @@ const CreateTopUpLoanOffer = async (data) => {
         logger.info('Existing loan found:', existingLoan.id);
 
         // 4. Get loan product details
-        const productResponse = await api.get(`${API_ENDPOINTS.PRODUCT}/${productCode}`);
+        const productResponse = await fetchMifosProduct(productCode);
         if (!productResponse.status) {
             throw new Error('Loan product not found');
         }
@@ -843,7 +853,7 @@ const CreateTakeoverLoanOffer = async (data) => {
         logger.info('Existing loan found for takeover:', existingLoan.id);
 
         // 4. Get loan product details
-        const productResponse = await api.get(`${API_ENDPOINTS.PRODUCT}/${productCode}`);
+        const productResponse = await fetchMifosProduct(productCode);
         if (!productResponse.status) {
             throw new Error('Loan product not found');
         }
@@ -1001,7 +1011,8 @@ const CreateLoanOffer = async (data) => {
         logger.info('Calculating loan offer for:', { checkNumber, applicationNumber, nin, requestedAmount });
 
         // 1. Validate product exists with fallback logic
-        let productId = productCode || 17; // Use provided productCode or default to 17
+        const tenantId = getActiveTenantContext()?.tenantId || null;
+        let productId = await resolveMifosProductId(productCode, tenantId);
         logger.info('Requested product ID:', productId);
 
         // Get loan product details for validation and calculation

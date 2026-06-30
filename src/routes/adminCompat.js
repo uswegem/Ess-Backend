@@ -190,7 +190,7 @@ router.get('/messages/pending-responses', authMiddleware, async (req, res) => {
         
         try {
             pendingResponses = await MessageLog.find({
-                status: { $in: ['PENDING', 'AWAITING_RESPONSE'] }
+                status: { $in: ['pending', 'failed'] }
             })
             .sort({ createdAt: -1 })
             .limit(100)

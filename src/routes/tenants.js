@@ -366,6 +366,27 @@ router.put('/:tenantId/users/:userId', authMiddleware, permissionMiddleware('use
 router.delete('/:tenantId/users/:userId', authMiddleware, permissionMiddleware('users:manage'), TenantUserController.remove);
 
 router.get('/:tenantId/certificates', authMiddleware, permissionMiddleware('tenant:read'), TenantCertificateController.getCertificates);
+
+/**
+ * @swagger
+ * /api/v1/tenants/{tenantId}/certificates:
+ *   post:
+ *     summary: Upload ESS signing certificates (PEM)
+ *     tags: [Tenants]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Certificates uploaded
+ *   delete:
+ *     summary: Remove tenant certificates
+ *     tags: [Tenants]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Certificates removed
+ */
 router.post(
   '/:tenantId/certificates',
   authMiddleware,

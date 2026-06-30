@@ -1,6 +1,7 @@
 const request = require('supertest');
 const User = require('../../src/models/User');
 const Tenant = require('../../src/models/Tenant');
+const MessageLog = require('../../src/models/MessageLog');
 const { buildM5TestApp, loginSuperAdmin } = require('./m4TestHelper');
 
 const SAMPLE_CERT = `-----BEGIN CERTIFICATE-----
@@ -36,6 +37,7 @@ describe('Dashboard API (M5)', () => {
       .set('Authorization', `Bearer ${token}`);
     expect(res.status).toBe(200);
     expect(res.body.data.overview).toBeDefined();
+    expect(res.body.data.loanStatistics.essSummary).toHaveLength(6);
   });
 
   it('GET /api/v1/dashboard/activity returns logs', async () => {
@@ -44,6 +46,49 @@ describe('Dashboard API (M5)', () => {
       .set('Authorization', `Bearer ${token}`);
     expect(res.status).toBe(200);
     expect(res.body.data.logs).toBeDefined();
+  });
+
+  it('GET /api/v1/dashboard/messages counts pending and failed messages', async () => {
+    const tenant = await Tenant.create({
+      tenantId: 'msg-tenant',
+      tenantName: 'Msg FSP',
+      fspCode: 'MSG01',
+      fspName: 'Msg FSP',
+      contactPerson: 'Admin',
+      contactEmail: 'msg@test.com',
+      contactPhone: '+255700000099',
+      status: 'active',
+    });
+
+    await MessageLog.create({
+      tenantId: tenant.tenantId,
+      messageId: 'msg-1',
+      messageType: 'RESPONSE',
+      status: 'pending',
+      xmlPayload: '<xml/>',
+    });
+    await MessageLog.create({
+      tenantId: tenant.tenantId,
+      messageId: 'msg-2',
+      messageType: 'RESPONSE',
+      status: 'failed',
+      xmlPayload: '<xml/>',
+    });
+    await MessageLog.create({
+      tenantId: tenant.tenantId,
+      messageId: 'msg-3',
+      messageType: 'RESPONSE',
+      status: 'sent',
+      xmlPayload: '<xml/>',
+    });
+
+    const res = await request(app)
+      .get('/api/v1/dashboard/messages')
+      .query({ tenantId: tenant.tenantId })
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.pendingCount).toBe(2);
   });
 });
 
@@ -94,5 +139,18 @@ describe('Tenant certificates API (M5)', () => {
 
     expect(get.status).toBe(200);
     expect(get.body.data.hasCertificates).toBe(true);
+
+    const del = await request(app)
+      .delete(`/api/v1/tenants/${tenantId}/certificates`)
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(del.status).toBe(200);
+
+    const afterDelete = await request(app)
+      .get(`/api/v1/tenants/${tenantId}/certificates`)
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(afterDelete.status).toBe(200);
+    expect(afterDelete.body.data.hasCertificates).toBe(false);
   });
 });
