@@ -33,7 +33,7 @@ const API_EXAMPLES = {
   },
   mifosConfigOverride: {
     mode: 'override',
-    baseUrl: 'https://fineract.example.com/fineract-provider/api/v1',
+    baseUrl: 'https://fineract.example.com/fineract-provider/api',
     tenantId: 'acme-uat',
     makerUsername: 'maker',
     makerPassword: 'secret',

@@ -97,7 +97,7 @@ const mifosConfigSchema = Joi.object({
   }),
   checkerUsername: Joi.string().trim().when('mode', {
     is: 'override',
-    then: Joi.required(),
+    then: Joi.optional(),
     otherwise: Joi.optional()
   }),
   checkerPassword: Joi.string().when('mode', {

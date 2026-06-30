@@ -3,7 +3,8 @@ const axios = require('axios');
 const {
   getEffectiveConfig,
   getTokenForTenant,
-  useTenantMifos
+  useTenantMifos,
+  normalizeMifosBaseUrl
 } = require('./mifosTenantClient');
 const { getCbsTimeoutMs } = require('../config/runtimeEnv');
 
@@ -89,7 +90,7 @@ class MifosAuthManager {
                 password: effective?.checkerPassword || process.env.CBS_CHECKER_PASSWORD
             };
 
-            const baseUrl = effective?.baseUrl || process.env.CBS_BASE_URL;
+            const baseUrl = normalizeMifosBaseUrl(effective?.baseUrl || process.env.CBS_BASE_URL);
             const fineractTenant = effective?.tenantId || process.env.CBS_Tenant;
 
             logger.info(`🔐 Refreshing ${userType} authentication token...`);

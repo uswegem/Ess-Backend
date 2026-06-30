@@ -2,10 +2,19 @@ const axios = require('axios');
 const Tenant = require('../models/Tenant');
 const { getCbsTimeoutMs } = require('../config/runtimeEnv');
 
+function normalizeMifosBaseUrl(url) {
+  if (!url) return url;
+  let normalized = String(url).trim().replace(/\/+$/, '');
+  if (normalized.endsWith('/v1')) {
+    normalized = normalized.slice(0, -3);
+  }
+  return normalized;
+}
+
 function getPlatformMifosConfig() {
   return {
     mode: 'inherit_default',
-    baseUrl: process.env.CBS_BASE_URL,
+    baseUrl: normalizeMifosBaseUrl(process.env.CBS_BASE_URL),
     tenantId: process.env.CBS_Tenant,
     makerUsername: process.env.CBS_MAKER_USERNAME,
     makerPassword: process.env.CBS_MAKER_PASSWORD,
@@ -27,7 +36,7 @@ function getEffectiveConfig(tenant) {
 
   return {
     mode: 'override',
-    baseUrl: tenant.mifosConfig.baseUrl,
+    baseUrl: normalizeMifosBaseUrl(tenant.mifosConfig.baseUrl),
     tenantId: tenant.mifosConfig.tenantId,
     makerUsername: tenant.mifosConfig.makerUsername,
     makerPassword: tenant.getMakerPassword?.() || null,
@@ -54,7 +63,7 @@ async function fetchToken(config, userType = 'maker') {
   }
 
   const response = await axios.post(
-    `${config.baseUrl.replace(/\/$/, '')}/v1/authentication`,
+    `${normalizeMifosBaseUrl(config.baseUrl)}/v1/authentication`,
     credentials,
     {
       headers: {
@@ -148,6 +157,7 @@ function resolveTenantForMifos(req) {
 }
 
 module.exports = {
+  normalizeMifosBaseUrl,
   getPlatformMifosConfig,
   getEffectiveConfig,
   getTokenForTenant,

@@ -82,7 +82,7 @@ describe('MIFOS tenant config integration', () => {
       getCheckerPassword: () => 'checker-pass'
     };
     const config = getEffectiveConfig(doc);
-    expect(config.baseUrl).toBe('https://tenant-override.example.com/api/v1');
+    expect(config.baseUrl).toBe('https://tenant-override.example.com/api');
     expect(config.tenantId).toBe('fineract-tenant');
     expect(config.mode).toBe('override');
   });
@@ -108,7 +108,7 @@ describe('MIFOS tenant config integration', () => {
       await applyTenantMifosToConfig(config, 'maker');
     });
 
-    expect(config.baseURL).toBe('https://ctx-override.example.com/api/v1');
+    expect(config.baseURL).toBe('https://ctx-override.example.com/api');
     expect(config.headers['Mifos-Platform-TenantId']).toBe('ctx-fineract');
     expect(config.headers.Authorization).toBe('Basic mock-token');
     jest.restoreAllMocks();

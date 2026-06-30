@@ -1,5 +1,11 @@
 const Tenant = require('../models/Tenant');
-const { getEffectiveConfig, getTokenForTenant, formatMifosAuthError } = require('./mifosTenantClient');
+const {
+  getEffectiveConfig,
+  getTokenForTenant,
+  formatMifosAuthError,
+  normalizeMifosBaseUrl,
+  clearTenantTokenCache
+} = require('./mifosTenantClient');
 
 class MifosConfigError extends Error {
   constructor(message, code = 'MIFOS_CONFIG_ERROR') {
@@ -10,25 +16,47 @@ class MifosConfigError extends Error {
   }
 }
 
+function normalizeMifosPayload(payload = {}) {
+  const normalized = { ...payload };
+
+  if (normalized.mode !== 'override') {
+    return normalized;
+  }
+
+  normalized.baseUrl = normalizeMifosBaseUrl(normalized.baseUrl);
+  normalized.makerUsername = normalized.makerUsername || normalized.username;
+  normalized.makerPassword = normalized.makerPassword || normalized.password;
+  normalized.checkerUsername = normalized.checkerUsername || normalized.makerUsername;
+  normalized.checkerPassword = normalized.checkerPassword || normalized.makerPassword;
+
+  delete normalized.username;
+  delete normalized.password;
+
+  return normalized;
+}
+
 async function saveMifosConfig(tenant, payload, updatedBy) {
-  const mode = payload.mode || tenant.mifosConfig?.mode || 'inherit_default';
+  const normalized = normalizeMifosPayload(payload);
+  const mode = normalized.mode || tenant.mifosConfig?.mode || 'inherit_default';
   tenant.mifosConfig = tenant.mifosConfig || {};
 
   tenant.mifosConfig.mode = mode;
 
   if (mode === 'override') {
-    tenant.mifosConfig.baseUrl = payload.baseUrl;
-    tenant.mifosConfig.tenantId = payload.tenantId;
-    tenant.mifosConfig.makerUsername = payload.makerUsername;
-    tenant.mifosConfig.checkerUsername = payload.checkerUsername;
-    if (payload.makerPassword) {
-      tenant.mifosConfig.makerPasswordEncrypted = payload.makerPassword;
+    tenant.mifosConfig.baseUrl = normalized.baseUrl;
+    tenant.mifosConfig.tenantId = normalized.tenantId;
+    tenant.mifosConfig.makerUsername = normalized.makerUsername;
+    tenant.mifosConfig.checkerUsername = normalized.checkerUsername;
+    if (normalized.makerPassword) {
+      tenant.mifosConfig.makerPasswordEncrypted = normalized.makerPassword;
     }
-    if (payload.checkerPassword) {
-      tenant.mifosConfig.checkerPasswordEncrypted = payload.checkerPassword;
+    if (normalized.checkerPassword) {
+      tenant.mifosConfig.checkerPasswordEncrypted = normalized.checkerPassword;
     }
-    tenant.mifosConfig.callbackUrl = payload.callbackUrl || tenant.mifosConfig.callbackUrl;
-    if (payload.timeoutMs) tenant.mifosConfig.timeoutMs = payload.timeoutMs;
+    tenant.mifosConfig.callbackUrl = normalized.callbackUrl || tenant.mifosConfig.callbackUrl;
+    if (normalized.timeoutMs) tenant.mifosConfig.timeoutMs = normalized.timeoutMs;
+  } else {
+    clearTenantTokenCache(tenant.tenantId);
   }
 
   tenant.mifosConfig.isConfigured = mode === 'inherit_default' || Boolean(tenant.mifosConfig.baseUrl);
@@ -56,6 +84,7 @@ async function validateMifosConfig(tenant) {
   }
 
   try {
+    clearTenantTokenCache(tenant?.tenantId);
     await getTokenForTenant(tenant, 'maker');
     tenant.mifosConfig = tenant.mifosConfig || {};
     tenant.mifosConfig.lastValidatedAt = checkedAt;
@@ -91,6 +120,7 @@ function isMifosConfigured(tenant) {
 
 module.exports = {
   MifosConfigError,
+  normalizeMifosPayload,
   saveMifosConfig,
   validateMifosConfig,
   assertReadyForActivation,
