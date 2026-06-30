@@ -97,16 +97,20 @@ class TenantCertificateController {
       };
       await tenant.save();
 
-      await AuditLog.create({
-        action: 'certificate_upload',
-        description: `ESS signing certificates uploaded for tenant ${tenantId}`,
-        tenantId,
-        tenant: tenant._id,
-        userId: req.user?._id,
-        correlationId: req.correlationId,
-        ipAddress: req.ip,
-        status: 'success'
-      });
+      try {
+        await AuditLog.create({
+          action: 'certificate_upload',
+          description: `ESS signing certificates uploaded for tenant ${tenantId}`,
+          tenantId,
+          tenant: tenant._id,
+          userId: req.user?._id,
+          correlationId: req.correlationId,
+          ipAddress: req.ip,
+          status: 'success'
+        });
+      } catch (auditError) {
+        logger.warn('Certificate upload audit log failed:', auditError.message);
+      }
 
       res.json({
         success: true,
@@ -144,16 +148,20 @@ class TenantCertificateController {
       tenant.certificates = undefined;
       await tenant.save();
 
-      await AuditLog.create({
-        action: 'certificate_delete',
-        description: `ESS signing certificates removed for tenant ${tenantId}`,
-        tenantId,
-        tenant: tenant._id,
-        userId: req.user?._id,
-        correlationId: req.correlationId,
-        ipAddress: req.ip,
-        status: 'success'
-      });
+      try {
+        await AuditLog.create({
+          action: 'certificate_delete',
+          description: `ESS signing certificates removed for tenant ${tenantId}`,
+          tenantId,
+          tenant: tenant._id,
+          userId: req.user?._id,
+          correlationId: req.correlationId,
+          ipAddress: req.ip,
+          status: 'success'
+        });
+      } catch (auditError) {
+        logger.warn('Certificate delete audit log failed:', auditError.message);
+      }
 
       res.json({ success: true, message: 'Certificates removed.' });
     } catch (error) {
