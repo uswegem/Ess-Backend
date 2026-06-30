@@ -8,6 +8,12 @@ const {
   maskSecret
 } = require('../utils/tenantSecretCrypto');
 
+function baseApiKeyName(name) {
+  return String(name || '')
+    .replace(/(?: \(rotated\))+$/i, '')
+    .trim() || 'API Key';
+}
+
 const apiKeySchema = new mongoose.Schema({
   tenantId: {
     type: String,
@@ -191,7 +197,6 @@ apiKeySchema.statics.findByRawKey = async function findByRawKey(rawKey) {
 apiKeySchema.statics.rotate = async function rotate(keyId, {
   revokedBy = null,
   reason = 'rotated',
-  nameSuffix = ' (rotated)'
 } = {}) {
   const oldKey = await this.findById(keyId);
   if (!oldKey) {
@@ -215,7 +220,7 @@ apiKeySchema.statics.rotate = async function rotate(keyId, {
 
   const created = await this.createForTenant({
     tenant,
-    name: `${oldKey.name}${nameSuffix}`,
+    name: baseApiKeyName(oldKey.name),
     permissions: oldKey.permissions,
     expiresAt: oldKey.expiresAt,
     rateLimit: oldKey.rateLimit,

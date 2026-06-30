@@ -60,6 +60,51 @@ describe('MIFOS tenant config integration', () => {
     expect(res.body.data.valid).toBe(true);
   });
 
+  it('validates unsaved override mifos config from request body', async () => {
+    const res = await request(app)
+      .post(`/api/v1/tenants/${tenant.tenantId}/mifos-config/validate`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        mode: 'override',
+        baseUrl: 'https://tenant-draft.example.com/api/v1',
+        tenantId: 'draft-fineract',
+        makerUsername: 'maker',
+        makerPassword: 'secret'
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.valid).toBe(true);
+  });
+
+  it('rejects draft validation when submitted credentials fail authentication', async () => {
+    const originalEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'development';
+    const fetchSpy = jest.spyOn(mifosTenantClient, 'fetchToken').mockRejectedValue(
+      Object.assign(new Error('MIFOS authentication failed (401). Verify CBS maker/checker username and password.'), {
+        response: { status: 401 }
+      })
+    );
+
+    const res = await request(app)
+      .post(`/api/v1/tenants/${tenant.tenantId}/mifos-config/validate`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        mode: 'override',
+        baseUrl: 'https://tenant-draft.example.com/api/v1',
+        tenantId: 'draft-fineract',
+        makerUsername: 'maker',
+        makerPassword: 'wrong-password'
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.valid).toBe(false);
+    expect(res.body.data.message).toBeTruthy();
+    expect(fetchSpy).toHaveBeenCalled();
+
+    process.env.NODE_ENV = originalEnv;
+    fetchSpy.mockRestore();
+  });
+
   it('returns effective platform config for inherit_default', async () => {
     const updated = await Tenant.findOne({ tenantId: tenant.tenantId });
     updated.mifosConfig = { mode: 'inherit_default' };
@@ -112,6 +157,33 @@ describe('MIFOS tenant config integration', () => {
     expect(config.headers['Mifos-Platform-TenantId']).toBe('ctx-fineract');
     expect(config.headers.Authorization).toBe('Basic mock-token');
     jest.restoreAllMocks();
+  });
+
+  it('returns saved mifos config on tenant get', async () => {
+    await request(app)
+      .put(`/api/v1/tenants/${tenant.tenantId}/mifos-config`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        mode: 'override',
+        baseUrl: 'https://tenant-saved.example.com/api/v1',
+        tenantId: 'saved-fineract',
+        makerUsername: 'maker',
+        makerPassword: 'secret'
+      });
+
+    const res = await request(app)
+      .get(`/api/v1/tenants/${tenant.tenantId}`)
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.tenant.mifosConfig).toMatchObject({
+      mode: 'override',
+      baseUrl: 'https://tenant-saved.example.com/api',
+      tenantId: 'saved-fineract',
+      makerUsername: 'maker',
+      hasMakerPassword: true
+    });
+    expect(res.body.data.tenant.mifosConfig.makerPasswordEncrypted).toBeUndefined();
   });
 
   it('returns integration health', async () => {

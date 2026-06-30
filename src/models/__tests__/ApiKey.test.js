@@ -74,4 +74,14 @@ describe('ApiKey model', () => {
     const found = await ApiKey.findByRawKey(result.rawKey);
     expect(found._id.toString()).toBe(result.apiKey._id.toString());
   });
+
+  it('reuses base name on rotation without stacking (rotated) suffix', async () => {
+    const { apiKey } = await ApiKey.createForTenant({
+      tenant,
+      name: 'Production (rotated) (rotated)'
+    });
+
+    const result = await ApiKey.rotate(apiKey._id, { reason: 'test rotation' });
+    expect(result.apiKey.name).toBe('Production');
+  });
 });

@@ -160,6 +160,7 @@ module.exports = {
   normalizeMifosBaseUrl,
   getPlatformMifosConfig,
   getEffectiveConfig,
+  fetchToken,
   getTokenForTenant,
   getAuthHeaderForTenant,
   getAxiosClientForTenant,

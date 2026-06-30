@@ -33,6 +33,30 @@ async function generateUniqueTenantId(base) {
   return candidate;
 }
 
+function toPublicMifosConfig(tenant) {
+  const obj = tenant.toSafeJSON ? tenant.toSafeJSON() : tenant.toObject?.() || tenant;
+  const cfg = obj.mifosConfig || {};
+  const mode = cfg.mode || 'inherit_default';
+
+  if (mode === 'inherit_default') {
+    return { mode: 'inherit_default' };
+  }
+
+  return {
+    mode: 'override',
+    baseUrl: cfg.baseUrl || '',
+    tenantId: cfg.tenantId || '',
+    makerUsername: cfg.makerUsername || '',
+    checkerUsername: cfg.checkerUsername || cfg.makerUsername || '',
+    callbackUrl: cfg.callbackUrl || '',
+    timeoutMs: cfg.timeoutMs,
+    isConfigured: Boolean(cfg.isConfigured),
+    lastValidatedAt: cfg.lastValidatedAt || null,
+    hasMakerPassword: Boolean(cfg.makerPasswordEncrypted),
+    hasCheckerPassword: Boolean(cfg.checkerPasswordEncrypted)
+  };
+}
+
 function toPublicTenant(tenant) {
   const obj = tenant.toSafeJSON ? tenant.toSafeJSON() : tenant.toObject();
   return {
@@ -49,6 +73,7 @@ function toPublicTenant(tenant) {
     status: obj.status,
     onboarding: obj.onboarding,
     mifosConfigured: isMifosConfigured(tenant),
+    mifosConfig: toPublicMifosConfig(tenant),
     subscription: obj.subscription,
     metadata: obj.metadata,
     createdAt: obj.createdAt,
@@ -172,6 +197,7 @@ async function isFspCodeAvailable(fspCode, excludeTenantId) {
 
 module.exports = {
   TenantServiceError,
+  toPublicMifosConfig,
   toPublicTenant,
   createTenant,
   listTenants,

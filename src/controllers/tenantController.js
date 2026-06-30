@@ -153,8 +153,12 @@ class TenantController {
   static async validateMifosConfig(req, res) {
     try {
       const { tenantId } = req.params;
+      if (!canAccessTenant(req, tenantId)) {
+        return sendError(res, 403, 'Access denied for this tenant');
+      }
       const tenant = await getTenantById(tenantId);
-      const result = await validateMifosConfig(tenant);
+      const payload = req.body && Object.keys(req.body).length > 0 ? req.body : null;
+      const result = await validateMifosConfig(tenant, payload);
       return sendSuccess(res, { data: result });
     } catch (error) {
       return handleServiceError(res, error);

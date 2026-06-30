@@ -226,7 +226,7 @@ router.put('/:tenantId/mifos-config', authMiddleware, permissionMiddleware('tena
  *       200:
  *         description: Validation result with valid flag and checkedAt
  */
-router.post('/:tenantId/mifos-config/validate', authMiddleware, permissionMiddleware('tenant:read'), TenantController.validateMifosConfig);
+router.post('/:tenantId/mifos-config/validate', authMiddleware, permissionMiddleware('tenant:read'), validateBody(mifosConfigSchema), TenantController.validateMifosConfig);
 
 /**
  * @swagger
