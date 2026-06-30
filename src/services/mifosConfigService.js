@@ -1,9 +1,10 @@
 const Tenant = require('../models/Tenant');
-const { getEffectiveConfig, getTokenForTenant } = require('./mifosTenantClient');
+const { getEffectiveConfig, getTokenForTenant, formatMifosAuthError } = require('./mifosTenantClient');
 
 class MifosConfigError extends Error {
   constructor(message, code = 'MIFOS_CONFIG_ERROR') {
     super(message);
+    this.name = 'MifosConfigError';
     this.code = code;
     this.statusCode = 400;
   }
@@ -62,7 +63,7 @@ async function validateMifosConfig(tenant) {
     await tenant.save();
     return { valid: true, checkedAt };
   } catch (error) {
-    return { valid: false, checkedAt, message: error.message };
+    return { valid: false, checkedAt, message: formatMifosAuthError(error) };
   }
 }
 

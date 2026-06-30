@@ -14,9 +14,21 @@ const {
 const { saveMifosConfig, validateMifosConfig, MifosConfigError } = require('../services/mifosConfigService');
 const { getEffectiveConfig } = require('../services/mifosTenantClient');
 
+function isKnownServiceError(error) {
+  return (
+    error instanceof TenantServiceError
+    || error instanceof MifosConfigError
+    || error?.code === 'MIFOS_CONFIG_ERROR'
+    || error?.code === 'TENANT_ERROR'
+    || error?.code === 'INVALID_STATUS_TRANSITION'
+    || (typeof error?.statusCode === 'number' && error.statusCode >= 400 && error.statusCode < 500)
+  );
+}
+
 function handleServiceError(res, error) {
-  if (error instanceof TenantServiceError || error instanceof MifosConfigError) {
-    return sendError(res, error.statusCode, error.message, { code: error.code });
+  if (isKnownServiceError(error)) {
+    const statusCode = error.statusCode || 400;
+    return sendError(res, statusCode, error.message, { code: error.code });
   }
   logger.error('Tenant controller error:', error);
   return sendError(res, 500, 'Internal server error');
@@ -163,6 +175,8 @@ class TenantController {
           status: tenant.status,
           mifos: {
             mode: config.mode,
+            baseUrl: config.baseUrl,
+            fineractTenantId: config.tenantId,
             valid: mifosResult.valid,
             checkedAt: mifosResult.checkedAt,
             message: mifosResult.message

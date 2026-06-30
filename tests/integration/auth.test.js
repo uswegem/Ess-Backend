@@ -84,6 +84,7 @@ describe('Authentication API integration', () => {
     expect(refresh.body.data.token).toBeTruthy();
     expect(refresh.body.data.refreshToken).toBeTruthy();
     expect(refresh.body.data.refreshToken).not.toBe(login.body.data.refreshToken);
+    expect(refresh.body.data.permissions).toEqual(expect.arrayContaining(['tenant:read', 'dashboard:read']));
   });
 
   it('rejects profile access without token', async () => {

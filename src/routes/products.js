@@ -379,7 +379,7 @@ router.post('/', ...productWriteGuards, async (req, res) => {
       termsConditions: termsConditions || [],
       mifosProductId,
       createdBy: req.user?.userId,
-      fspCode: process.env.FSP_CODE || 'FL8090',
+      fspCode: req.tenant?.fspCode || process.env.FSP_CODE || 'FL8090',
       ...(req.tenant?.tenantId && {
         tenantId: req.tenant.tenantId,
         tenant: req.tenant.tenantObjectId
@@ -625,7 +625,7 @@ router.post('/import-csv', ...productWriteGuards, upload.single('file'), async (
               forExecutive: data.forExecutive?.toLowerCase() === 'true',
               shariaFacility: data.shariaFacility?.toLowerCase() === 'true',
               createdBy: req.user?.userId,
-              fspCode: process.env.FSP_CODE || 'FL8090',
+              fspCode: req.tenant?.fspCode || process.env.FSP_CODE || 'FL8090',
               ...(req.tenant?.tenantId && {
                 tenantId: req.tenant.tenantId,
                 tenant: req.tenant.tenantObjectId

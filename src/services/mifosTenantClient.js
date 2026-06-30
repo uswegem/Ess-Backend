@@ -155,5 +155,6 @@ module.exports = {
   getAxiosClientForTenant,
   clearTenantTokenCache,
   useTenantMifos,
-  resolveTenantForMifos
+  resolveTenantForMifos,
+  formatMifosAuthError
 };

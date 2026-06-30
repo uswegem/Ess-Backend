@@ -14,10 +14,28 @@ const {
   validateApiKeyFormat,
   decryptSecret
 } = require('../utils/tenantSecretCrypto');
-const { resolveActiveTenantForUser } = require('../middleware/authMiddleware');
+const { resolveActiveTenantForUser, resolveSwitcherTenants, isPlatformAdminUser, PLATFORM_SWITCHER_PERMISSIONS } = require('../middleware/authMiddleware');
 const { logSecurityEvent } = require('../utils/securityEventLogger');
 
 const LEGACY_TENANT_ID = () => process.env.LEGACY_TENANT_ID || 'legacy-zedone';
+
+function syntheticPlatformMembership() {
+  return {
+    role: 'tenant_admin',
+    getEffectivePermissions: () => PLATFORM_SWITCHER_PERMISSIONS
+  };
+}
+
+function resolveEffectiveMembership(user, membership) {
+  if (membership) return membership;
+  if (isPlatformAdminUser(user)) return syntheticPlatformMembership();
+  return null;
+}
+
+function resolveAccessPermissions(user, membership) {
+  const effective = resolveEffectiveMembership(user, membership);
+  return effective?.getEffectivePermissions?.() || [];
+}
 
 class AuthController {
   static async login(req, res) {
@@ -102,11 +120,13 @@ class AuthController {
       await user.save();
 
       const { activeTenant, memberships, membership } = await resolveActiveTenantForUser(user);
+      const effectiveMembership = resolveEffectiveMembership(user, membership);
+      const permissions = resolveAccessPermissions(user, membership);
 
       const token = JWTUtils.generateAccessToken(user, {
         tenantId: activeTenant?.tenantId || null,
-        tenantRole: membership?.role || null,
-        permissions: membership?.getEffectivePermissions?.() || []
+        tenantRole: effectiveMembership?.role || null,
+        permissions
       });
 
       const { rawToken: refreshToken } = await RefreshToken.createForUser({
@@ -141,11 +161,12 @@ class AuthController {
             email: user.email,
             role: user.role,
             fullName: user.fullName,
+            phone: user.phone,
             lastLogin: user.lastLogin
           },
           activeTenant: activeTenant || null,
           memberships,
-          permissions: membership?.getEffectivePermissions?.() || []
+          permissions
         }
       });
     } catch (error) {
@@ -291,24 +312,20 @@ class AuthController {
       }
 
       let membership = await resolveTenantMembership(user._id, tenantId);
-      if (!membership && user.role !== 'super_admin') {
+      if (!membership && !isPlatformAdminUser(user)) {
         return res.status(403).json({
           success: false,
           message: 'You do not have access to this tenant.'
         });
       }
 
-      if (!membership && user.role === 'super_admin') {
-        membership = {
-          role: 'tenant_admin',
-          getEffectivePermissions: () => ['tenant:read', 'tenant:update', 'users:manage', 'dashboard:read']
-        };
-      }
+      membership = resolveEffectiveMembership(user, membership);
+      const permissions = resolveAccessPermissions(user, membership);
 
       const token = JWTUtils.generateAccessToken(user, {
         tenantId: tenant.tenantId,
-        tenantRole: membership.role,
-        permissions: membership.getEffectivePermissions()
+        tenantRole: membership?.role || null,
+        permissions
       });
 
       const { rawToken: refreshToken } = await RefreshToken.createForUser({
@@ -336,7 +353,7 @@ class AuthController {
           token,
           refreshToken,
           activeTenant: buildTenantContext(tenant, 'jwt'),
-          permissions: membership.getEffectivePermissions()
+          permissions
         }
       });
     } catch (error) {
@@ -385,7 +402,7 @@ class AuthController {
       if (stored.tenantId) {
         membership = await resolveTenantMembership(user._id, stored.tenantId);
         tenant = await Tenant.findOne({ tenantId: stored.tenantId });
-        if (!membership && user.role !== 'super_admin') {
+        if (!membership && !isPlatformAdminUser(user)) {
           await logSecurityEvent({
             eventType: 'refresh_token_invalid',
             description: 'Refresh token tenant membership no longer valid',
@@ -400,6 +417,9 @@ class AuthController {
         }
       }
 
+      membership = resolveEffectiveMembership(user, membership);
+      const permissions = resolveAccessPermissions(user, membership);
+
       const { rawToken: newRefreshToken, record: newRecord } = await RefreshToken.createForUser({
         userId: user._id,
         tenantId: stored.tenantId,
@@ -413,7 +433,7 @@ class AuthController {
       const accessToken = JWTUtils.generateAccessToken(user, {
         tenantId: stored.tenantId,
         tenantRole: membership?.role || null,
-        permissions: membership?.getEffectivePermissions?.() || []
+        permissions
       });
 
       await AuditLog.create({
@@ -432,7 +452,8 @@ class AuthController {
         data: {
           token: accessToken,
           refreshToken: newRefreshToken,
-          activeTenant: tenant ? buildTenantContext(tenant, 'jwt') : null
+          activeTenant: tenant ? buildTenantContext(tenant, 'jwt') : null,
+          permissions
         }
       });
     } catch (error) {
@@ -446,13 +467,13 @@ class AuthController {
 
   static async getProfile(req, res) {
     try {
-      const { memberships } = await resolveActiveTenantForUser(req.user);
+      const tenants = await resolveSwitcherTenants(req.user);
 
       res.json({
         success: true,
         data: {
           user: req.user,
-          tenants: memberships,
+          tenants,
           activeTenant: req.tenant || null,
           authContext: req.authContext || null
         }

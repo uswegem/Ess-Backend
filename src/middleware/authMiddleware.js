@@ -14,6 +14,43 @@ const { logSecurityEvent } = require('../utils/securityEventLogger');
 const LEGACY_TENANT_ID = () => process.env.LEGACY_TENANT_ID || 'legacy-zedone';
 
 const TENANT_ADMIN_ROLES = ['tenant_admin', 'operations_manager', 'finance_officer', 'support_staff'];
+const PLATFORM_ADMIN_ROLES = ['super_admin', 'admin'];
+
+function isPlatformAdminUser(user) {
+  return PLATFORM_ADMIN_ROLES.includes(user?.role);
+}
+
+const PLATFORM_SWITCHER_PERMISSIONS = [
+  'tenant:read',
+  'tenant:update',
+  'users:manage',
+  'api_keys:manage',
+  'dashboard:read',
+  'audit:read'
+];
+
+async function resolveSwitcherTenants(user) {
+  if (isPlatformAdminUser(user)) {
+    const tenants = await Tenant.find({ status: 'active' }).sort({ tenantName: 1 }).lean();
+    return tenants.map((t) => ({
+      tenantId: t.tenantId,
+      tenantName: t.tenantName,
+      fspCode: t.fspCode,
+      role: 'platform',
+      isActive: true
+    }));
+  }
+
+  const memberships = await TenantUser.findActiveTenantsForUser(user._id);
+  return memberships.map((m) => ({
+    tenantId: m.tenantId,
+    tenantName: m.tenant?.tenantName,
+    fspCode: m.tenant?.fspCode,
+    role: m.role,
+    permissions: m.getEffectivePermissions(),
+    isActive: m.isActive
+  }));
+}
 
 function buildAuthContext({ user, decoded, apiKey, membership }) {
   if (apiKey) {
@@ -38,18 +75,21 @@ function buildAuthContext({ user, decoded, apiKey, membership }) {
 }
 
 async function resolveActiveTenantForUser(user) {
-  const memberships = await TenantUser.findActiveTenantsForUser(user._id);
+  const switcherTenants = await resolveSwitcherTenants(user);
 
-  if (memberships.length === 0 && user.role === 'super_admin') {
-    const legacy = await Tenant.findOne({ tenantId: LEGACY_TENANT_ID() });
-    if (legacy) {
-      return {
-        activeTenant: buildTenantContext(legacy, 'jwt'),
-        memberships: [],
-        membership: null
-      };
+  if (isPlatformAdminUser(user)) {
+    let activeTenantDoc = await Tenant.findOne({ tenantId: LEGACY_TENANT_ID() });
+    if (!activeTenantDoc && switcherTenants.length > 0) {
+      activeTenantDoc = await Tenant.findOne({ tenantId: switcherTenants[0].tenantId });
     }
+    return {
+      activeTenant: activeTenantDoc ? buildTenantContext(activeTenantDoc, 'jwt') : null,
+      memberships: switcherTenants,
+      membership: null
+    };
   }
+
+  const memberships = await TenantUser.findActiveTenantsForUser(user._id);
 
   if (memberships.length === 0) {
     return { activeTenant: null, memberships: [], membership: null };
@@ -60,14 +100,7 @@ async function resolveActiveTenantForUser(user) {
 
   return {
     activeTenant: tenant ? buildTenantContext(tenant, 'jwt') : null,
-    memberships: memberships.map((m) => ({
-      tenantId: m.tenantId,
-      tenantName: m.tenant?.tenantName,
-      fspCode: m.tenant?.fspCode,
-      role: m.role,
-      permissions: m.getEffectivePermissions(),
-      isActive: m.isActive
-    })),
+    memberships: switcherTenants,
     membership: primary
   };
 }
@@ -157,7 +190,7 @@ const authMiddleware = async (req, res, next) => {
     let membership = null;
     if (decoded.tenantId) {
       membership = await resolveTenantMembership(user._id, decoded.tenantId);
-      if (!membership && user.role !== 'super_admin') {
+      if (!membership && !isPlatformAdminUser(user)) {
         await logSecurityEvent({
           eventType: 'permission_denied',
           description: `No tenant membership for ${decoded.tenantId}`,
@@ -345,5 +378,9 @@ module.exports = {
   auditMiddleware,
   buildAuthContext,
   resolveActiveTenantForUser,
+  resolveSwitcherTenants,
+  isPlatformAdminUser,
+  PLATFORM_ADMIN_ROLES,
+  PLATFORM_SWITCHER_PERMISSIONS,
   TENANT_ADMIN_ROLES
 };
