@@ -33,11 +33,11 @@ jobs:
         id: vars
         run: |
           if [ "${{ github.event.inputs.environment }}" = "prod" ]; then
-            echo "deploy_path=/opt/ess2/prod/backend" >> $GITHUB_OUTPUT
+            echo "deploy_path=/opt/ess/backend" >> $GITHUB_OUTPUT
             echo "pm2_app=ess2-backend-prod" >> $GITHUB_OUTPUT
             echo "port=4000" >> $GITHUB_OUTPUT
           else
-            echo "deploy_path=/opt/ess2/uat/backend" >> $GITHUB_OUTPUT
+            echo "deploy_path=/home/uswege/ess2/backend" >> $GITHUB_OUTPUT
             echo "pm2_app=ess2-backend-uat" >> $GITHUB_OUTPUT
             echo "port=4001" >> $GITHUB_OUTPUT
           fi
@@ -45,18 +45,18 @@ jobs:
       - name: Copy build to Hetzner
         uses: appleboy/scp-action@v0.1.7
         with:
-          host: ${{ secrets.HETZNER_HOST }}
-          username: ${{ secrets.HETZNER_USER }}
-          key: ${{ secrets.HETZNER_SSH_KEY }}
+          host: ${{ github.event.inputs.environment == 'prod' && secrets.ESS_HOST_PROD || secrets.ESS_HOST_UAT }}
+          username: ${{ github.event.inputs.environment == 'prod' && secrets.ESS_USER_PROD || secrets.ESS_USER_UAT }}
+          key: ${{ github.event.inputs.environment == 'prod' && secrets.ESS_SSH_KEY_PROD || secrets.ESS_SSH_KEY_UAT }}
           source: "dist/,package.json,package-lock.json"
           target: ${{ steps.vars.outputs.deploy_path }}
 
       - name: Install & restart on Hetzner
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ secrets.HETZNER_HOST }}
-          username: ${{ secrets.HETZNER_USER }}
-          key: ${{ secrets.HETZNER_SSH_KEY }}
+          host: ${{ github.event.inputs.environment == 'prod' && secrets.ESS_HOST_PROD || secrets.ESS_HOST_UAT }}
+          username: ${{ github.event.inputs.environment == 'prod' && secrets.ESS_USER_PROD || secrets.ESS_USER_UAT }}
+          key: ${{ github.event.inputs.environment == 'prod' && secrets.ESS_SSH_KEY_PROD || secrets.ESS_SSH_KEY_UAT }}
           script: |
             cd ${{ steps.vars.outputs.deploy_path }}
             npm install
