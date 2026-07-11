@@ -36,7 +36,7 @@ jobs:
           else
             echo "deploy_path=/home/uswege/ess2/backend" >> $GITHUB_OUTPUT
             echo "pm2_app=ess2-backend-uat" >> $GITHUB_OUTPUT
-            echo "port=4001" >> $GITHUB_OUTPUT
+            echo "port=4002" >> $GITHUB_OUTPUT
           fi
 
       - name: Copy app to Hetzner
