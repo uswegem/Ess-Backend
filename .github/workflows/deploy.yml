@@ -26,9 +26,6 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build
-        run: npm run build
-
       - name: Set deploy variables
         id: vars
         run: |
@@ -42,13 +39,13 @@ jobs:
             echo "port=4001" >> $GITHUB_OUTPUT
           fi
 
-      - name: Copy build to Hetzner
+      - name: Copy app to Hetzner
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ github.event.inputs.environment == 'prod' && secrets.ESS_HOST_PROD || secrets.ESS_HOST_UAT }}
           username: ${{ github.event.inputs.environment == 'prod' && secrets.ESS_USER_PROD || secrets.ESS_USER_UAT }}
           key: ${{ github.event.inputs.environment == 'prod' && secrets.ESS_SSH_KEY_PROD || secrets.ESS_SSH_KEY_UAT }}
-          source: "dist/,package.json,package-lock.json"
+          source: "server.js,package.json,package-lock.json,ecosystem.config.js,src/,keys/"
           target: ${{ steps.vars.outputs.deploy_path }}
 
       - name: Install & restart on Hetzner
@@ -62,7 +59,7 @@ jobs:
             npm install
             npm prune --omit=dev
             pm2 restart ${{ steps.vars.outputs.pm2_app }} --update-env \
-              || PORT=${{ steps.vars.outputs.port }} pm2 start dist/main.js \
+              || PORT=${{ steps.vars.outputs.port }} pm2 start server.js \
                   --name ${{ steps.vars.outputs.pm2_app }}
             pm2 save
 
