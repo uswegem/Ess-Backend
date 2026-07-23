@@ -58,7 +58,7 @@ jobs:
             cd ${{ steps.vars.outputs.deploy_path }}
             npm install
             npm prune --omit=dev
-            pm2 restart ${{ steps.vars.outputs.pm2_app }} --update-env \
+            PORT=${{ steps.vars.outputs.port }} pm2 restart ${{ steps.vars.outputs.pm2_app }} --update-env \
               || PORT=${{ steps.vars.outputs.port }} pm2 start server.js \
                   --name ${{ steps.vars.outputs.pm2_app }}
             pm2 save
