@@ -34,7 +34,7 @@ jobs:
             echo "pm2_app=ess2-backend-prod" >> $GITHUB_OUTPUT
             echo "port=4000" >> $GITHUB_OUTPUT
           else
-            echo "deploy_path=/opt/ess/backend" >> $GITHUB_OUTPUT
+            echo "deploy_path=/home/uswege/ess2/backend" >> $GITHUB_OUTPUT
             echo "pm2_app=ess2-backend-uat" >> $GITHUB_OUTPUT
             echo "port=4002" >> $GITHUB_OUTPUT
           fi
