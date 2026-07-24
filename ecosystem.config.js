@@ -14,7 +14,7 @@ module.exports = {
     env_file: '.env', // Load environment variables from .env file
     env: {
       NODE_ENV: 'production',
-      PORT: 4000
+      PORT: 3002
     },
     max_memory_restart: '512M',
     error_file: 'logs/err.log',
