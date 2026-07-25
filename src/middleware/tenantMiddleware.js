@@ -4,6 +4,7 @@ const ApiKey = require('../models/ApiKey');
 const TenantUser = require('../models/TenantUser');
 const JWTUtils = require('../utils/jwtUtils');
 const { decryptSecret, validateApiKeyFormat } = require('../utils/tenantSecretCrypto');
+const LOAN_CONSTANTS = require('../utils/loanConstants');
 
 const LEGACY_TENANT_ID = () => process.env.LEGACY_TENANT_ID || 'legacy-zedone';
 const isEnforcementEnabled = () => process.env.TENANT_ENFORCEMENT === 'true';
@@ -25,6 +26,13 @@ const TENANT_OPTIONAL_PREFIXES = [
   '/api/v1/onboarding'
 ];
 
+// Server-to-server routes called directly by external systems (e.g. ESS UTUMISHI)
+// that have no way to present a tenant API key or JWT. These always resolve to
+// the legacy tenant, regardless of TENANT_ENFORCEMENT, instead of 403ing.
+const LEGACY_FALLBACK_ALWAYS_PREFIXES = [
+  '/api/loan'
+];
+
 function isPublicRoute(req) {
   const path = req.path || '';
   return PUBLIC_PATH_PREFIXES.some((prefix) => path === prefix || path.startsWith(`${prefix}/`));
@@ -35,6 +43,11 @@ function isTenantOptionalRoute(req) {
   return TENANT_OPTIONAL_PREFIXES.some((prefix) => path === prefix || path.startsWith(`${prefix}/`));
 }
 
+function isLegacyFallbackAlwaysRoute(req) {
+  const path = req.path || '';
+  return LEGACY_FALLBACK_ALWAYS_PREFIXES.some((prefix) => path === prefix || path.startsWith(`${prefix}/`));
+}
+
 function buildTenantContext(tenant, authMethod) {
   return {
     tenantId: tenant.tenantId,
@@ -43,6 +56,7 @@ function buildTenantContext(tenant, authMethod) {
     fspName: tenant.fspName,
     status: tenant.status,
     subscriptionPlan: tenant.subscription?.plan || 'standard',
+    maxTenureMonths: tenant.loanConfig?.maxTenureMonths || LOAN_CONSTANTS.MAX_TENURE,
     authMethod
   };
 }
@@ -160,11 +174,12 @@ async function attachTenantToRequest(req, res, next) {
       }
     }
 
-    if (!tenantContext && !isEnforcementEnabled()) {
+    if (!tenantContext && (!isEnforcementEnabled() || isLegacyFallbackAlwaysRoute(req))) {
       tenantContext = await attachLegacyTenant();
       if (tenantContext) {
         logger.debug('Attached legacy tenant for backward compatibility', {
-          tenantId: tenantContext.tenantId
+          tenantId: tenantContext.tenantId,
+          route: req.path
         });
       }
     }
@@ -203,6 +218,7 @@ async function resolveTenantMembership(userId, tenantId) {
 module.exports = {
   isPublicRoute,
   isTenantOptionalRoute,
+  isLegacyFallbackAlwaysRoute,
   extractTenantFromToken,
   extractTenantFromApiKey,
   attachTenantToRequest,

@@ -1,6 +1,17 @@
 const mongoose = require('mongoose');
 
 const possibleLoanChargesSchema = new mongoose.Schema({
+  tenantId: {
+    type: String,
+    required: false,
+    index: true
+  },
+  tenant: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Tenant',
+    index: true
+  },
+
   productCode: {
     type: String,
     required: true
@@ -18,6 +29,25 @@ const possibleLoanChargesSchema = new mongoose.Schema({
     enum: ['CHECK_NUMBER', 'NATIONAL_ID'],
     default: 'NATIONAL_ID'
   },
+  applicationNumber: {
+    type: String
+  },
+  requestedAmount: {
+    type: Number
+  },
+  requestedTenure: {
+    type: Number
+  },
+  deductibleAmount: {
+    type: Number
+  },
+  desiredDeductibleAmount: {
+    type: Number
+  },
+  affordabilityType: {
+    type: String,
+    enum: ['FORWARD', 'REVERSE']
+  },
   request: {
     type: String, // JSON string of UtumishiOfferRequest
     required: true
@@ -27,6 +57,30 @@ const possibleLoanChargesSchema = new mongoose.Schema({
   },
   offerData: {
     type: String, // JSON string of loan offer response
+  },
+  eligibleAmount: {
+    type: Number
+  },
+  monthlyReturnAmount: {
+    type: Number
+  },
+  totalProcessingFees: {
+    type: Number
+  },
+  totalInsurance: {
+    type: Number
+  },
+  otherCharges: {
+    type: Number
+  },
+  totalInterestRateAmount: {
+    type: Number
+  },
+  netLoanAmount: {
+    type: Number
+  },
+  totalAmountToPay: {
+    type: Number
   },
   response: {
     type: String, // JSON string of UtumishiOfferResponse
@@ -48,6 +102,10 @@ const possibleLoanChargesSchema = new mongoose.Schema({
     default: Date.now
   }
 });
+
+possibleLoanChargesSchema.index({ tenantId: 1, applicationNumber: 1 });
+possibleLoanChargesSchema.index({ tenantId: 1, idNumber: 1 });
+possibleLoanChargesSchema.index({ tenantId: 1, status: 1, createdAt: -1 });
 
 // Update the updatedAt field before saving
 possibleLoanChargesSchema.pre('save', function(next) {

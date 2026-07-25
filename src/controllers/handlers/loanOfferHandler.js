@@ -467,6 +467,7 @@ const handleLoanOfferRequest = async (parsedData, res) => {
         const otherCharges = charges.otherCharges;
         const totalAmountToPay = loanAmount + totalInterestRateAmount;
         const loanNumber = generateLoanNumber();
+        const fspReferenceNumber = header.FSPReferenceNumber || messageDetails.CheckNumber || messageDetails.ApplicationNumber;
 
         logger.info(`Calculated using LOAN_CHARGES_REQUEST logic - LoanAmount: ${loanAmount}, TotalAmountToPay: ${totalAmountToPay}, OtherCharges: ${otherCharges}`);
 
@@ -545,7 +546,10 @@ const handleLoanOfferRequest = async (parsedData, res) => {
                 try {
                     const mapping = await LoanMappingService.getByEssApplicationNumber(messageDetails.ApplicationNumber);
                     if (mapping) {
-                        await LoanMappingService.updateStatus(mapping.essApplicationNumber, mapping.status, {
+                        await LoanMappingService.updateStatus(mapping.essApplicationNumber, 'INITIAL_APPROVAL_SENT', {
+                            essLoanNumberAlias: loanNumber,
+                            fspReferenceNumber: fspReferenceNumber,
+                            initialOfferSentAt: mapping.initialOfferSentAt || new Date(),
                             metadata: {
                                 ...(mapping.metadata || {}),
                                 callbacksSent: [

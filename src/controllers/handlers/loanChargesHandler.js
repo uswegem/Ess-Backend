@@ -5,6 +5,8 @@ const { getMessageId } = require('../../utils/messageIdGenerator');
 const LOAN_CONSTANTS = require('../../utils/loanConstants');
 const loanCalculations = require('../../utils/loanCalculations');
 const LoanMappingService = require('../../services/loanMappingService');
+const PossibleLoanCharges = require('../../models/PossibleLoanCharges');
+const { getActiveTenantContext } = require('../../utils/tenantContext');
 
 // Import loanUtils functions directly to avoid path issues
 const path = require('path');
@@ -12,6 +14,7 @@ const loanUtilsPath = path.resolve(__dirname, '../../utils/loanUtils.js');
 const loanUtils = require(loanUtilsPath);
 
 const handleLoanChargesRequest = async (parsedData, res) => {
+    let possibleLoanChargesEntity = null;
     try {
         const header = parsedData.Document.Data.Header;
         const messageType = header.MessageType;
@@ -85,6 +88,32 @@ const handleLoanChargesRequest = async (parsedData, res) => {
 
         logger.info(`AffordabilityType: ${affordabilityType}, RequestedAmount: ${requestedAmount}, Tenure: ${requestedTenure}, DeductibleAmount: ${deductibleAmount}, MaxAffordableEMI: ${maxAffordableEMI}`);
 
+        // Persist incoming LOAN_CHARGES_REQUEST to MongoDB (tenant-scoped audit trail).
+        // Degrades safely to an untenanted record if no tenant context is resolved,
+        // matching LoanMappingService's scoping pattern.
+        if (messageDetails.CheckNumber) {
+            try {
+                const tenantId = getActiveTenantContext()?.tenantId || null;
+                possibleLoanChargesEntity = await PossibleLoanCharges.create({
+                    ...(tenantId ? { tenantId } : {}),
+                    productCode: messageDetails.ProductCode || '17',
+                    idNumber: messageDetails.CheckNumber,
+                    idNumberType: 'CHECK_NUMBER',
+                    applicationNumber: messageDetails.ApplicationNumber,
+                    requestedAmount: requestedAmount,
+                    requestedTenure: requestedTenure,
+                    deductibleAmount: deductibleAmount,
+                    desiredDeductibleAmount: desiredDeductibleAmount,
+                    affordabilityType: affordabilityType,
+                    request: JSON.stringify(messageDetails),
+                    status: 'PENDING'
+                });
+                logger.info(`PossibleLoanCharges record created: ${possibleLoanChargesEntity._id}`);
+            } catch (dbError) {
+                logger.warn('Failed to persist LOAN_CHARGES_REQUEST:', dbError.message);
+            }
+        }
+
         // Ensure tenure is set for calculations
         if (requestedTenure === null) {
             if (affordabilityType === 'REVERSE') {
@@ -94,7 +123,17 @@ const handleLoanChargesRequest = async (parsedData, res) => {
                 let optimalTenure = LOAN_CONSTANTS.DEFAULT_TENURE;
                 let optimalMonthlyReturn = desirableEMI;
 
-                const possibleTenures = [12, 24, 36, 48, 60, 72, 84, 96]; // Common tenure options
+                // Generate tenure options in 12-month increments up to this tenant's
+                // configured cap (falls back to the global default when no tenant
+                // context is resolved, e.g. legacy/untenanted requests).
+                const maxTenureMonths = getActiveTenantContext()?.maxTenureMonths || LOAN_CONSTANTS.MAX_TENURE;
+                const possibleTenures = [];
+                for (let t = 12; t <= maxTenureMonths; t += 12) {
+                    possibleTenures.push(t);
+                }
+                if (possibleTenures.length === 0) {
+                    possibleTenures.push(maxTenureMonths);
+                }
                 for (const tenure of possibleTenures) {
                     const testLoanAmount = await loanCalculations.calculateMaxLoanFromEMI(desirableEMI, interestRate, tenure);
                     if (testLoanAmount > maxEligibleAmount) {
@@ -171,7 +210,7 @@ const handleLoanChargesRequest = async (parsedData, res) => {
         const totalDeductions = totalProcessingFees + totalInsurance + otherCharges;
         const netLoanAmount = eligibleAmount - totalDeductions;
         const totalAmountToPay = eligibleAmount + totalInterestRateAmount;
-        
+
         // Update loan mapping to track charges request
         try {
             if (messageDetails.ApplicationNumber || messageDetails.CheckNumber) {
@@ -184,7 +223,41 @@ const handleLoanChargesRequest = async (parsedData, res) => {
                     // No mapping found, continue without tracking
                     logger.info('No existing loan mapping found for charges request');
                 }
-                
+
+                if (!mapping) {
+                    // No mapping found, try to create one from charges request data
+                    // so later messages (LOAN_OFFER_REQUEST, etc.) for the same
+                    // application have something to correlate against.
+                    // Tenant-scoped via LoanMappingService's own resolveTenantId/
+                    // applyWriteScope (ambient context, degrades to untenanted if none).
+                    logger.info('No existing loan mapping found for charges request, creating new mapping');
+                    try {
+                        const loanNumber = loanUtils.generateLoanNumber();
+                        const fspRefNumber = loanUtils.generateFSPReferenceNumber();
+
+                        mapping = await LoanMappingService.createInitialMapping(
+                            identifier,
+                            messageDetails.CheckNumber,
+                            fspRefNumber,
+                            {
+                                essLoanNumberAlias: loanNumber,
+                                productCode: messageDetails.ProductCode || '17',
+                                requestedAmount: requestedAmount,
+                                tenure: requestedTenure,
+                                status: 'CHARGES_CALCULATED',
+                                metadata: {
+                                    createdFromChargesRequest: true,
+                                    chargesRequestAt: new Date().toISOString()
+                                }
+                            }
+                        );
+                        logger.info('✅ Created loan mapping from LOAN_CHARGES_REQUEST for application:', identifier);
+                    } catch (mappingCreationError) {
+                        logger.warn('Unable to create mapping from charges request:', mappingCreationError.message);
+                        // Continue without mapping if creation fails
+                    }
+                }
+
                 if (mapping) {
                     await LoanMappingService.updateStatus(mapping.essApplicationNumber, mapping.status, {
                         metadata: {
@@ -248,6 +321,30 @@ const handleLoanChargesRequest = async (parsedData, res) => {
             }
         };
 
+        // Update PossibleLoanCharges record with calculated results
+        if (possibleLoanChargesEntity) {
+            try {
+                await possibleLoanChargesEntity.updateOne({
+                    requestedTenure: requestedTenure,
+                    eligibleAmount: eligibleAmount,
+                    monthlyReturnAmount: monthlyReturnAmount,
+                    totalProcessingFees: totalProcessingFees,
+                    totalInsurance: totalInsurance,
+                    otherCharges: otherCharges,
+                    totalInterestRateAmount: totalInterestRateAmount,
+                    netLoanAmount: netLoanAmount,
+                    totalAmountToPay: totalAmountToPay,
+                    affordabilityType: affordabilityType,
+                    response: JSON.stringify(responseData.Data.MessageDetails),
+                    status: 'COMPLETED',
+                    updatedAt: new Date()
+                });
+                logger.info(`PossibleLoanCharges record updated: ${possibleLoanChargesEntity._id}`);
+            } catch (dbError) {
+                logger.warn('Failed to update PossibleLoanCharges with results:', dbError.message);
+            }
+        }
+
         // Store charge calculation results for later use
         try {
             const checkNumber = messageDetails.CheckNumber;
@@ -282,12 +379,23 @@ const handleLoanChargesRequest = async (parsedData, res) => {
         res.status(200).send(signedResponse);
     } catch (error) {
         logger.error('Error processing loan charges request:', error);
-        
+
+        // Mark PossibleLoanCharges record as failed
+        if (possibleLoanChargesEntity) {
+            try {
+                await possibleLoanChargesEntity.updateOne({
+                    status: 'FAILED',
+                    errorMessage: error.message,
+                    updatedAt: new Date()
+                });
+            } catch (dbErr) { /* silent */ }
+        }
+
         // Track loan processing error
         if (trackLoanError) {
             trackLoanError('processing_error', header?.MessageType || 'unknown');
         }
-        
+
         return sendErrorResponse(res, '8012', error.message, 'xml', parsedData);
     }
 };

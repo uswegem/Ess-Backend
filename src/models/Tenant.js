@@ -110,6 +110,9 @@ const tenantSchema = new mongoose.Schema({
     requireIpWhitelist: { type: Boolean, default: false },
     requireSignature: { type: Boolean, default: true }
   },
+  loanConfig: {
+    maxTenureMonths: { type: Number, default: 36, min: 1 }
+  },
   certificates: {
     publicCertificatePath: String,
     privateKeyPath: String,
