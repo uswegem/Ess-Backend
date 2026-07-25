@@ -9,14 +9,14 @@ const LOAN_CONSTANTS = {
   TEST_LOAN_AMOUNT: 5000000,           // 5,000,000 TZS - Amount used in tests
 
   // ===== LOAN TERMS =====
-  DEFAULT_TENURE: 96,                  // 96 months - Default loan tenure
-  MAX_TENURE: 96,                     // 96 months - Maximum loan tenure
+  DEFAULT_TENURE: 36,                  // 36 months - Default loan tenure
+  MAX_TENURE: 36,                     // 36 months - Maximum loan tenure
   TEST_TENURE: 24,                     // 24 months - Tenure used in tests
 
   // ===== INTEREST RATES & FEES =====
   DEFAULT_INTEREST_RATE: 24,           // 24% - Default annual interest rate
   ADMIN_FEE_RATE: 0.02,                // 2% - Administration fee rate
-  INSURANCE_RATE: 0.015,               // 1.5% - Insurance rate
+  INSURANCE_RATE: 0.0075,              // 0.75% - Insurance rate
   OTHER_CHARGES: 50000,                // 50,000 TZS - Fixed other charges (legal fees, etc.)
   TOTAL_LOAN_MULTIPLIER: 1.1,          // 110% - Total loan amount multiplier (principal + interest)
 
