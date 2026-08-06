@@ -121,13 +121,16 @@ async function sendOutgoingMessage({ tenant, user, correlationId, MessageType, M
 
   const signedXml = digitalSignature.createSignedXML(dataObject);
 
+  // Pass msgId through explicitly - it's already embedded in signedXml's Header.MsgId
+  // (built above), and logOutgoingMessage must not generate a second, different one for
+  // the same send or the log becomes untraceable to what was actually signed/sent.
   let messageLog = await logOutgoingMessage(signedXml, MessageType, {
     applicationNumber,
     tenantId: tenant.tenantId,
     tenantObjectId: tenant.tenantObjectId,
     fspCode: FSPCode,
     correlationId
-  }, user?._id || null);
+  }, user?._id || null, msgId);
 
   try {
     logger.info('Message signed successfully, sending to ESS...');

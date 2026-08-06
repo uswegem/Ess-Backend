@@ -9,12 +9,17 @@ const { buildTenantQuery } = require('./tenantQuery');
  * @param {string} messageType - The type of message being sent
  * @param {Object} metadata - Additional metadata (applicationNumber, loanNumber, etc.)
  * @param {string} userId - ID of the user sending the message (optional)
+ * @param {string} messageId - Pre-generated message ID to use (optional). Pass the SAME id
+ *   that was already embedded in xmlPayload's Header.MsgId when the caller signed it -
+ *   otherwise this generates its own, different one, and the log becomes untraceable to
+ *   what was actually sent/signed (confirmed real bug: MessageLog.messageId and the signed
+ *   XML's Header.MsgId ended up as two different values for the same send). Falls back to
+ *   generating a fresh one only if the caller doesn't pass one, for backward compatibility.
  * @returns {Object} The created message log document
  */
-async function logOutgoingMessage(xmlPayload, messageType, metadata = {}, userId = null) {
+async function logOutgoingMessage(xmlPayload, messageType, metadata = {}, userId = null, messageId = null) {
   try {
-    // Generate a unique message ID
-    const messageId = getMessageId(messageType);
+    const resolvedMessageId = messageId || getMessageId(messageType);
 
     // Extract common fields from metadata
     const {
@@ -29,7 +34,7 @@ async function logOutgoingMessage(xmlPayload, messageType, metadata = {}, userId
     } = metadata;
 
     const baseDoc = {
-      messageId,
+      messageId: resolvedMessageId,
       messageType,
       direction: 'outgoing',
       status: 'pending',
@@ -51,7 +56,7 @@ async function logOutgoingMessage(xmlPayload, messageType, metadata = {}, userId
     const messageLog = new MessageLog(baseDoc);
 
     await messageLog.save();
-    logger.info(`Logged outgoing message: ${messageId} (${messageType})`);
+    logger.info(`Logged outgoing message: ${resolvedMessageId} (${messageType})`);
 
     return messageLog;
   } catch (error) {

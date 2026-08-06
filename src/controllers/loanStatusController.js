@@ -57,13 +57,17 @@ exports.triggerLoanStatusRequest = async (req, res) => {
     // Use createSignedXML for proper signature generation
     const signedXml = digitalSignature.createSignedXML(dataObject);
 
+    // Pass MsgId through explicitly - it's already embedded in signedXml's Header.MsgId
+    // (built above), and logOutgoingMessage must not generate a second, different one for
+    // the same send or the log becomes untraceable to what was actually signed/sent (same
+    // bug found and fixed in outgoingMessageService.js's sendOutgoingMessage).
     messageLog = await logOutgoingMessage(signedXml, 'LOAN_STATUS_REQUEST', {
       applicationNumber: ApplicationNumber,
       tenantId: tenant.tenantId,
       tenantObjectId: tenant.tenantObjectId,
       fspCode: FSPCode,
       correlationId: req.correlationId
-    }, req.user?._id || null);
+    }, req.user?._id || null, MsgId);
 
     logger.info('LOAN_STATUS_REQUEST signed successfully, sending to ESS...');
 
