@@ -209,13 +209,17 @@ productSchema.methods.toProductDetailFragment = function() {
     ProductName: this.productName,
     ProductDescription: this.productDescription || '',
     ForExecutive: this.forExecutive ? 'Y' : 'N',
-    MinimumTenure: this.minTenure,
-    MaximumTenure: this.maxTenure,
+    // Joi's string schema in outgoingMessageValidator doesn't coerce numbers - these are
+    // Mongoose Number fields, so (unlike the old template-literal version, which stringified
+    // everything for free) they need an explicit String() or validateOutgoingMessageDetails
+    // rejects the submission before it ever reaches Utumishi.
+    MinimumTenure: String(this.minTenure),
+    MaximumTenure: String(this.maxTenure),
     InterestRate: this.interestRate.toFixed(2),
     ProcessFee: this.processingFee.toFixed(2),
     Insurance: this.insurance.toFixed(2),
-    MaxAmount: this.maxAmount,
-    MinAmount: this.minAmount,
+    MaxAmount: String(this.maxAmount),
+    MinAmount: String(this.minAmount),
     RepaymentType: this.repaymentType,
     Currency: this.currency,
     InsuranceType: this.insuranceType,
