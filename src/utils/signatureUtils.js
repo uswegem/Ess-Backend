@@ -65,6 +65,10 @@ class DigitalSignature {
       const pki = forge.pki;
       const cert = pki.certificateFromPem(this.certificate);
       this.publicKey = pki.publicKeyToPem(cert.publicKey);
+      // Non-sensitive fingerprint (SHA256 of the public key PEM) - safe to log per-signing,
+      // lets us confirm at runtime that two different message types' sends used the
+      // identical private key without ever logging the key itself.
+      this.publicKeyFingerprint = crypto.createHash('sha256').update(this.publicKey).digest('hex');
       logger.info('✅ Public key extracted from FSP certificate');
     } catch (error) {
       logger.error('❌ Failed to extract public key from certificate:', error);
@@ -122,6 +126,12 @@ class DigitalSignature {
       // Confirmed via byte-for-byte diff: this is what was causing Utumishi's "8009 Invalid
       // Signature" on PRODUCT_DETAIL submissions containing such text.
       logger.info('Data to sign length:', xmlData.length, 'characters');
+
+      // MessageType is embedded in the Data element itself (<Header><MessageType>...) - pull
+      // it out purely for log context, so signing events for different message types can be
+      // told apart without changing this function's signature/call sites.
+      const messageTypeMatch = xmlData.match(/<MessageType>(.*?)<\/MessageType>/);
+      logger.info('🔑 Signing with key fingerprint (SHA256 of public key, non-sensitive):', this.publicKeyFingerprint, '| for MessageType:', messageTypeMatch ? messageTypeMatch[1] : 'unknown');
 
       // Create sign object with SHA256
       const sign = crypto.createSign('SHA256');
@@ -203,8 +213,8 @@ class DigitalSignature {
       }
 
       const dataElement = xmlData.substring(startIndex, endIndex + endTag.length);
-      logger.info('📄 Extracted Data element for signing');
-      
+      logger.info('📄 Extracted Data element for signing (full content):', dataElement);
+
       return dataElement;
     } catch (error) {
       logger.error('❌ Error extracting Data element:', error);
@@ -259,8 +269,8 @@ class DigitalSignature {
     };
 
     const signedXml = builder.buildObject(finalDoc);
-    logger.info('✅ Signed XML created successfully');
-    
+    logger.info('✅ Signed XML created successfully (full content):', signedXml);
+
     return signedXml;
   }
 

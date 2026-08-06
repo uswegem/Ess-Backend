@@ -10,9 +10,23 @@ const LoanMappingService = require('../services/loanMappingService');
 const { validateOutgoingMessageDetails } = require('../validations/outgoingMessageValidator');
 const { parseEssResponseCode } = require('../utils/essResponseParser');
 
+// Dedicated instance (not the shared global axios object) so this request interceptor only
+// ever logs Utumishi-bound traffic - not every unrelated axios call elsewhere in the app.
+const utumishiClient = axios.create();
+utumishiClient.interceptors.request.use((config) => {
+  // This runs immediately before axios hands the request off to the http/https adapter -
+  // the closest point to actual wire transmission reachable without patching Node's http
+  // internals. Logs the literal body/headers axios is about to send, for direct comparison
+  // against createSignedXML()'s returned string (logged separately in signatureUtils.js).
+  logger.info('📤 Outbound request to Utumishi - body (full content):', config.data);
+  logger.info('📤 Outbound request to Utumishi - headers:', JSON.stringify(config.headers));
+  logger.info('📤 Outbound request to Utumishi - body byte length:', Buffer.byteLength(config.data, 'utf8'));
+  return config;
+});
+
 async function sendToESS(signedXml) {
   const essUrl = getUtumishiEndpoint({ required: true });
-  return axios.post(essUrl, signedXml, {
+  return utumishiClient.post(essUrl, signedXml, {
     headers: {
       'Content-Type': 'application/xml',
       'Accept': 'application/xml'
