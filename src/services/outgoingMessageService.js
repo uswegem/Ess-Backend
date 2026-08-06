@@ -18,9 +18,12 @@ utumishiClient.interceptors.request.use((config) => {
   // the closest point to actual wire transmission reachable without patching Node's http
   // internals. Logs the literal body/headers axios is about to send, for direct comparison
   // against createSignedXML()'s returned string (logged separately in signatureUtils.js).
-  logger.info('📤 Outbound request to Utumishi - body (full content):', config.data);
-  logger.info('📤 Outbound request to Utumishi - headers:', JSON.stringify(config.headers));
-  logger.info('📤 Outbound request to Utumishi - body byte length:', Buffer.byteLength(config.data, 'utf8'));
+  // Interpolated into the message string, not passed as separate args - this app's logger
+  // format (winston.format.json() -> printf, no splat()) silently drops extra positional
+  // args, so passing them the "normal" way here would have logged only the labels.
+  logger.info(`📤 Outbound request to Utumishi - body (full content): ${config.data}`);
+  logger.info(`📤 Outbound request to Utumishi - headers: ${JSON.stringify(config.headers)}`);
+  logger.info(`📤 Outbound request to Utumishi - body byte length: ${Buffer.byteLength(config.data, 'utf8')}`);
   return config;
 });
 
