@@ -107,14 +107,25 @@ class DigitalSignature {
 
     try {
       logger.info('🔐 Generating SHA256withRSA signature...');
-      
-      // Normalize XML for consistent signing
-      const cleanXml = this.normalizeXMLForSigning(xmlData);
-      logger.info('Data to sign length:', cleanXml.length, 'characters');
-      
+
+      // IMPORTANT: sign xmlData exactly as given - do NOT run it through
+      // normalizeXMLForSigning() first. createSignedXML() (this function's only caller)
+      // always extracts this from the same compact-mode xml2js.Builder output
+      // (renderOpts: pretty:false), so there's no real inter-tag whitespace left to clean
+      // up - but normalizeXMLForSigning()'s `\s+` -> single-space collapse doesn't
+      // distinguish structural whitespace from whitespace *inside actual text content*.
+      // A field like a Terms & Conditions Description containing a genuine double space
+      // would get collapsed here but NOT in the XML actually transmitted (createSignedXML
+      // sends the raw builder output, never the normalized copy) - signing different bytes
+      // than what's sent, which any correct verifier (confirmed directly via `openssl dgst
+      // -verify`) rejects as an invalid signature, regardless of payload correctness.
+      // Confirmed via byte-for-byte diff: this is what was causing Utumishi's "8009 Invalid
+      // Signature" on PRODUCT_DETAIL submissions containing such text.
+      logger.info('Data to sign length:', xmlData.length, 'characters');
+
       // Create sign object with SHA256
       const sign = crypto.createSign('SHA256');
-      sign.update(cleanXml, 'utf8');
+      sign.update(xmlData, 'utf8');
       sign.end();
 
       // Generate signature with RSA
