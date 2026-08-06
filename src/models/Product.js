@@ -197,18 +197,24 @@ productSchema.index({ deductionCode: 1, productCode: 1 });
 // message type (LOAN_CHARGES_RESPONSE etc.) already builds and hands straight to
 // digitalSignature.createSignedXML(). This used to be a hand-assembled XML string that
 // sendOutgoingMessage then parsed back into an object before signing - the only message
-// type in the codebase doing that string round trip - which shipped two real bugs: booleans
-// serialized as "true"/"false" instead of the ESS-spec "Y"/"N" (this field only exists on
-// PRODUCT_DETAIL, so nothing else could have caught it), and free-text fields (e.g.
-// ProductDescription) went out unescaped instead of getting xml2js.Builder's automatic XML
-// escaping. Utumishi rejected submissions built the old way with "8009 Invalid Signature".
+// type in the codebase doing that string round trip - which was the actual "8009 Invalid
+// Signature" culprit (free-text fields like ProductDescription went out unescaped instead of
+// getting xml2js.Builder's automatic XML escaping). Confirmed fixed: Utumishi now responds
+// with real XSD validation errors instead of a signature rejection.
+//
+// ForExecutive/ShariaFacility: Utumishi's schema defines these as XSD boolean, which only
+// accepts "true"/"false" (confirmed directly via their own validator response -
+// "cvc-datatype-valid.1.2.1: 'N' is not a valid value for 'boolean'" - after this file
+// briefly changed them to "Y"/"N" based on a stale example template elsewhere in this app,
+// which was wrong for this specific field). String(boolean) reproduces the original
+// template-literal's "true"/"false" output, which was correct for this field all along.
 productSchema.methods.toProductDetailFragment = function() {
   return {
     DeductionCode: this.deductionCode,
     ProductCode: this.productCode,
     ProductName: this.productName,
     ProductDescription: this.productDescription || '',
-    ForExecutive: this.forExecutive ? 'Y' : 'N',
+    ForExecutive: String(this.forExecutive),
     // Joi's string schema in outgoingMessageValidator doesn't coerce numbers - these are
     // Mongoose Number fields, so (unlike the old template-literal version, which stringified
     // everything for free) they need an explicit String() or validateOutgoingMessageDetails
@@ -223,7 +229,7 @@ productSchema.methods.toProductDetailFragment = function() {
     RepaymentType: this.repaymentType,
     Currency: this.currency,
     InsuranceType: this.insuranceType,
-    ShariaFacility: this.shariaFacility ? 'Y' : 'N',
+    ShariaFacility: String(this.shariaFacility),
     TermsCondition: this.termsConditions.map(tc => ({
       TermsConditionNumber: tc.termsConditionNumber,
       Description: tc.description,
