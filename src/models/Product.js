@@ -193,38 +193,46 @@ productSchema.index({ tenantId: 1, mifosProductId: 1 }, { sparse: true });
 productSchema.index({ isActive: 1 });
 productSchema.index({ deductionCode: 1, productCode: 1 });
 
-// Inner PRODUCT_DETAIL fields only (no <MessageDetails> wrapper) - this is what
-// outgoingMessageService.sendOutgoingMessage expects as an XML-fragment MessageDetails string,
-// since it wraps whatever it's given in its own <MessageDetails> element before parsing.
+// PRODUCT_DETAIL's MessageDetails as a plain object - the same shape every other outgoing
+// message type (LOAN_CHARGES_RESPONSE etc.) already builds and hands straight to
+// digitalSignature.createSignedXML(). This used to be a hand-assembled XML string that
+// sendOutgoingMessage then parsed back into an object before signing - the only message
+// type in the codebase doing that string round trip - which shipped two real bugs: booleans
+// serialized as "true"/"false" instead of the ESS-spec "Y"/"N" (this field only exists on
+// PRODUCT_DETAIL, so nothing else could have caught it), and free-text fields (e.g.
+// ProductDescription) went out unescaped instead of getting xml2js.Builder's automatic XML
+// escaping. Utumishi rejected submissions built the old way with "8009 Invalid Signature".
 productSchema.methods.toProductDetailFragment = function() {
-  const termsXML = this.termsConditions.map(tc => `
-            <TermsCondition>
-                <TermsConditionNumber>${tc.termsConditionNumber}</TermsConditionNumber>
-                <Description>${tc.description}</Description>
-                <TCEffectiveDate>${tc.effectiveDate.toISOString().split('T')[0]}</TCEffectiveDate>
-            </TermsCondition>`).join('');
-
-  return `
-            <DeductionCode>${this.deductionCode}</DeductionCode>
-            <ProductCode>${this.productCode}</ProductCode>
-            <ProductName>${this.productName}</ProductName>
-            <ProductDescription>${this.productDescription || ''}</ProductDescription>
-            <ForExecutive>${this.forExecutive}</ForExecutive>
-            <MinimumTenure>${this.minTenure}</MinimumTenure>
-            <MaximumTenure>${this.maxTenure}</MaximumTenure>
-            <InterestRate>${this.interestRate.toFixed(2)}</InterestRate>
-            <ProcessFee>${this.processingFee.toFixed(2)}</ProcessFee>
-            <Insurance>${this.insurance.toFixed(2)}</Insurance>
-            <MaxAmount>${this.maxAmount}</MaxAmount>
-            <MinAmount>${this.minAmount}</MinAmount>
-            <RepaymentType>${this.repaymentType}</RepaymentType>
-            <Currency>${this.currency}</Currency>
-            <InsuranceType>${this.insuranceType}</InsuranceType>
-            <ShariaFacility>${this.shariaFacility}</ShariaFacility>${termsXML}`;
+  return {
+    DeductionCode: this.deductionCode,
+    ProductCode: this.productCode,
+    ProductName: this.productName,
+    ProductDescription: this.productDescription || '',
+    ForExecutive: this.forExecutive ? 'Y' : 'N',
+    MinimumTenure: this.minTenure,
+    MaximumTenure: this.maxTenure,
+    InterestRate: this.interestRate.toFixed(2),
+    ProcessFee: this.processingFee.toFixed(2),
+    Insurance: this.insurance.toFixed(2),
+    MaxAmount: this.maxAmount,
+    MinAmount: this.minAmount,
+    RepaymentType: this.repaymentType,
+    Currency: this.currency,
+    InsuranceType: this.insuranceType,
+    ShariaFacility: this.shariaFacility ? 'Y' : 'N',
+    TermsCondition: this.termsConditions.map(tc => ({
+      TermsConditionNumber: tc.termsConditionNumber,
+      Description: tc.description,
+      TCEffectiveDate: tc.effectiveDate.toISOString().split('T')[0]
+    }))
+  };
 };
 
-// Method to convert to PRODUCT_DETAIL XML format (full fragment, wrapped - used by the
-// multi-product sync preview which concatenates several products under one message).
+// BROKEN / unused - no callers found anywhere in the codebase. Predates the change above and
+// assumed toProductDetailFragment() returned a string; now that it returns an object this
+// would produce "<MessageDetails>[object Object]</MessageDetails>" if ever called. Left as-is
+// rather than guessing at a rewrite for a function nothing currently exercises - fix properly
+// (build via xml2js.Builder like everything else) if this is ever revived.
 productSchema.methods.toProductDetailXML = function() {
   return `
         <MessageDetails>${this.toProductDetailFragment()}

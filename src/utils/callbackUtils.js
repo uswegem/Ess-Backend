@@ -5,6 +5,7 @@ const express = require('express');
 const router = express.Router();
 const digitalSignature = require('../utils/signatureUtils');
 const axios = require('axios');
+const { getUtumishiHttpsAgent } = require('./utumishiHttpsAgent');
 
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 5000; // 5 seconds
@@ -43,6 +44,7 @@ async function sendCallback(callbackData) {
             },
             data: signedCallback,
             timeout: getApiTimeoutMs(),
+            httpsAgent: getUtumishiHttpsAgent(),
             validateStatus: function (status) {
                 return status >= 200 && status < 500; // Accept all responses to log them
             }

@@ -809,7 +809,7 @@ router.post('/:id/submit', authMiddleware, roleMiddleware(['super_admin', 'admin
     }
 
     try {
-      await sendOutgoingMessage({
+      const result = await sendOutgoingMessage({
         tenant: req.tenant,
         user: req.user,
         correlationId: req.correlationId,
@@ -817,15 +817,35 @@ router.post('/:id/submit', authMiddleware, roleMiddleware(['super_admin', 'admin
         MessageDetails: product.toProductDetailFragment()
       });
 
-      product.utumishiSyncStatus = 'SUBMITTED';
-      product.lastSyncedToUtumishi = new Date();
-      product.lastSubmitError = undefined;
       product.updatedBy = req.user?.userId;
+
+      // sendOutgoingMessage resolving only means the HTTPS call completed - result.success
+      // (derived from Utumishi's own ResponseCode, not just the HTTP status) is what actually
+      // tells us whether Utumishi accepted the submission. A 200 with e.g. "8009 Invalid
+      // Signature" in the body must not be recorded as SUBMITTED.
+      if (result.success) {
+        product.utumishiSyncStatus = 'SUBMITTED';
+        product.lastSyncedToUtumishi = new Date();
+        product.lastSubmitError = undefined;
+        await product.save();
+
+        logger.info(`Product ${product.productCode} submitted to Utumishi by ${req.user?.username}`);
+
+        return res.json({ success: true, message: 'Product submitted to Utumishi', data: { product } });
+      }
+
+      const rejectionReason = result.statusDesc || `Rejected by Utumishi (code ${result.responseCode})`;
+      product.utumishiSyncStatus = 'SYNC_FAILED';
+      product.lastSubmitError = rejectionReason;
       await product.save();
 
-      logger.info(`Product ${product.productCode} submitted to Utumishi by ${req.user?.username}`);
+      logger.error(`Product ${product.productCode} rejected by Utumishi: ${rejectionReason}`);
 
-      return res.json({ success: true, message: 'Product submitted to Utumishi', data: { product } });
+      return res.status(502).json({
+        success: false,
+        message: rejectionReason,
+        data: { product }
+      });
     } catch (sendError) {
       product.utumishiSyncStatus = 'SYNC_FAILED';
       product.lastSubmitError = sendError.message;

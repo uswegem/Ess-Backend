@@ -4,6 +4,9 @@ node_modules/
 !.env.example
 keys/
 *.pem
+# Public CA certs bundled to work around gateway.ess.utumishi.go.tz not sending its own
+# intermediate cert (see src/utils/utumishiHttpsAgent.js) - not secrets, must be tracked.
+!src/config/certs/*.pem
 *.pid
 logs/
 generated-documents/

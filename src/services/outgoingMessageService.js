@@ -3,6 +3,7 @@ const digitalSignature = require('../utils/signatureUtils');
 const { getMessageId } = require('../utils/messageIdGenerator');
 const logger = require('../utils/logger');
 const { getUtumishiEndpoint, getApiTimeoutMs } = require('../config/runtimeEnv');
+const { getUtumishiHttpsAgent } = require('../utils/utumishiHttpsAgent');
 const xml2js = require('xml2js');
 const { logOutgoingMessage, updateMessageLog } = require('../utils/messageLogger');
 const LoanMappingService = require('../services/loanMappingService');
@@ -16,7 +17,8 @@ async function sendToESS(signedXml) {
       'Content-Type': 'application/xml',
       'Accept': 'application/xml'
     },
-    timeout: getApiTimeoutMs()
+    timeout: getApiTimeoutMs(),
+    httpsAgent: getUtumishiHttpsAgent()
   });
 }
 
@@ -132,12 +134,25 @@ async function sendOutgoingMessage({ tenant, user, correlationId, MessageType, M
     const essResponse = await sendToESS(signedXml);
     logger.info('ESS Response received:', essResponse.status);
 
+    const { responseCode, statusDesc } = await parseEssResponseCode(essResponse.data);
+    // A 200 HTTP response only means the message reached Utumishi - it says nothing about
+    // whether Utumishi actually accepted it. '8000' is ESS/Utumishi's universal success
+    // code (the same convention the frontend's isESSSuccess() already applies to inbound
+    // responses); anything else - e.g. 8009 "Invalid Signature" - is a rejection and must
+    // not be logged or reported as sent.
+    const accepted = responseCode === '8000';
+
     if (messageLog) {
-      await updateMessageLog(messageLog.messageId, 'sent', essResponse.data, null, tenant.tenantId);
+      await updateMessageLog(
+        messageLog.messageId,
+        accepted ? 'sent' : 'failed',
+        essResponse.data,
+        accepted ? null : (statusDesc || `Rejected by Utumishi (code ${responseCode})`),
+        tenant.tenantId
+      );
     }
 
-    const { responseCode, statusDesc } = await parseEssResponseCode(essResponse.data);
-    return { success: true, sent: signedXml, essResponse: essResponse.data, responseCode, statusDesc, messageLog };
+    return { success: accepted, sent: signedXml, essResponse: essResponse.data, responseCode, statusDesc, messageLog };
   } catch (error) {
     if (messageLog) {
       await updateMessageLog(messageLog.messageId, 'failed', null, error.message, tenant.tenantId);
