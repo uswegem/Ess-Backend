@@ -1,0 +1,816 @@
+const logger = require('../utils/logger');
+const LoanMapping = require('../models/LoanMapping');
+const ClientService = require('./clientService');
+const DBTransaction = require('../utils/dbTransaction');
+const healthMonitor = require('../utils/loanMappingHealthMonitor');
+const { buildTenantQuery } = require('../utils/tenantQuery');
+const { getActiveTenantContext } = require('../utils/tenantContext');
+
+class LoanMappingService {
+  static resolveTenantId(tenantId = null) {
+    return tenantId || getActiveTenantContext()?.tenantId || null;
+  }
+
+  static resolveTenantObjectId(tenantObjectId = null) {
+    return tenantObjectId || getActiveTenantContext()?.tenantObjectId || null;
+  }
+
+  static scopeFilter(filter = {}, tenantId = null) {
+    const tid = this.resolveTenantId(tenantId);
+    return tid ? buildTenantQuery(tid, filter) : filter;
+  }
+
+  static applyWriteScope(data = {}, tenantId = null, tenantObjectId = null) {
+    const tid = this.resolveTenantId(tenantId);
+    const toid = this.resolveTenantObjectId(tenantObjectId);
+    if (!tid) return data;
+    return {
+      ...data,
+      tenantId: tid,
+      ...(toid ? { tenant: toid } : {})
+    };
+  }
+  /**
+   * Generate loan number alias in format: YYYYMMDDHHMM + 3 unique numbers
+   */
+  static generateLoanNumberAlias() {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const hours = String(now.getHours()).padStart(2, '0');
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+
+    // Generate 3 unique numbers (using milliseconds for uniqueness)
+    const unique = String(now.getMilliseconds()).padStart(3, '0').slice(-3);
+
+    return `${year}${month}${day}${hours}${minutes}${unique}`;
+  }
+
+  /**
+   * Create or update loan mapping with client data from LOAN_OFFER_REQUEST
+   */
+  static async createOrUpdateWithClientData(applicationNumber, checkNumber, clientData, loanData, employmentData, originalMessageType = null, tenantId = null, tenantObjectId = null) {
+    try {
+      const filter = this.scopeFilter({
+        essApplicationNumber: applicationNumber,
+        status: { $nin: ['CANCELLED', 'REJECTED'] }
+      }, tenantId);
+
+      const update = this.applyWriteScope({
+        essApplicationNumber: applicationNumber,
+        essCheckNumber: checkNumber,
+        productCode: loanData.productCode || "17",
+        requestedAmount: loanData.requestedAmount,
+        tenure: loanData.tenure || 24,
+        status: 'OFFER_SUBMITTED',
+        originalMessageType: originalMessageType, // Store original message type
+        metadata: {
+          clientData: clientData,
+          loanData: loanData,
+          employmentData: employmentData,
+          offerReceivedAt: new Date().toISOString(),
+          updatedVia: 'createOrUpdateWithClientData'
+        },
+        updatedAt: new Date()
+      }, tenantId, tenantObjectId);
+
+      const options = {
+        new: true,
+        upsert: true,
+        setDefaultsOnInsert: true
+      };
+
+      const mapping = await LoanMapping.findOneAndUpdate(filter, update, options);
+      logger.info(`✅ Stored client data for application: ${applicationNumber}`, {
+        mappingId: mapping._id,
+        isNew: !mapping.createdAt || mapping.createdAt === mapping.updatedAt
+      });
+      return mapping;
+    } catch (error) {
+      logger.error('❌ Error storing client data:', {
+        applicationNumber,
+        checkNumber,
+        error: error.message,
+        stack: error.stack,
+        errorType: error.name
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Create initial loan mapping when LOAN_INITIAL_APPROVAL_NOTIFICATION is sent
+   */
+  static async createInitialMapping(essApplicationNumber, essCheckNumber, fspReferenceNumber, loanDetails, tenantId = null, tenantObjectId = null) {
+    const startTime = Date.now();
+    
+    try {
+      // Validate required parameters
+      if (!essApplicationNumber) {
+        throw new Error('ESS Application Number is required');
+      }
+      if (!fspReferenceNumber) {
+        throw new Error('FSP Reference Number is required');
+      }
+      if (!loanDetails || typeof loanDetails.requestedAmount !== 'number' || loanDetails.requestedAmount <= 0) {
+        throw new Error('Loan details with valid requested amount (greater than 0) are required');
+      }
+
+      // Check if mapping already exists to prevent duplicates
+      // IMPORTANT: Exclude CANCELLED loans - they should not block new applications
+      const existingMapping = await LoanMapping.findOne(this.scopeFilter({
+        essApplicationNumber,
+        status: { $nin: ['CANCELLED', 'REJECTED'] }
+      }, tenantId));
+
+      if (existingMapping) {
+        logger.warn(`⚠️ Active loan mapping already exists for application: ${essApplicationNumber}`, {
+          existingId: existingMapping._id,
+          existingStatus: existingMapping.status,
+          note: 'CANCELLED and REJECTED loans are not considered active'
+        });
+        return existingMapping;
+      }
+
+      // Check if a CANCELLED or REJECTED mapping exists (for logging)
+      const cancelledMapping = await LoanMapping.findOne(this.scopeFilter({
+        essApplicationNumber,
+        status: { $in: ['CANCELLED', 'REJECTED'] }
+      }, tenantId));
+
+      if (cancelledMapping) {
+        logger.info(`ℹ️ Found ${cancelledMapping.status} loan mapping for application: ${essApplicationNumber}. Creating new mapping as this is treated as inactive.`, {
+          previousId: cancelledMapping._id,
+          previousStatus: cancelledMapping.status
+        });
+      }
+
+      const mapping = new LoanMapping(this.applyWriteScope({
+        essApplicationNumber,
+        essCheckNumber,
+        fspReferenceNumber,
+        essLoanNumberAlias: loanDetails.essLoanNumberAlias,
+        productCode: loanDetails.productCode || "17",
+        requestedAmount: loanDetails.requestedAmount,
+        tenure: loanDetails.tenure || 24,
+        mifosClientId: loanDetails.clientId,
+        mifosLoanId: loanDetails.loanId,
+        status: loanDetails.status || 'INITIAL_OFFER',
+        metadata: {
+          initialOfferDetails: loanDetails,
+          createdVia: 'createInitialMapping',
+          createdAt: new Date().toISOString()
+        }
+      }, tenantId, tenantObjectId));
+
+      await mapping.save();
+      const duration = Date.now() - startTime;
+      healthMonitor.recordOperation(true, duration);
+      
+      logger.info(`✅ Created initial loan mapping for application: ${essApplicationNumber}, check: ${essCheckNumber}, status: ${mapping.status}`, {
+        mappingId: mapping._id,
+        duration: `${duration}ms`
+      });
+      return mapping;
+    } catch (error) {
+      const duration = Date.now() - startTime;
+      healthMonitor.recordOperation(false, duration, error);
+      
+      logger.error('❌ Error creating initial loan mapping:', {
+        essApplicationNumber,
+        essCheckNumber,
+        fspReferenceNumber,
+        error: error.message,
+        stack: error.stack,
+        errorType: error.name,
+        duration: `${duration}ms`
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Update mapping when LOAN_FINAL_APPROVAL_NOTIFICATION is received
+   * Note: The loan number from ESS will be the same as our generated alias
+   */
+  static async updateWithFinalApproval(essLoanNumberAlias, finalApprovalData) {
+    try {
+      // Find mapping by ESS application number
+      const mapping = await LoanMapping.findOne({
+        essApplicationNumber: finalApprovalData.applicationNumber
+      });
+
+      if (!mapping) {
+        throw new Error(`No loan mapping found for application: ${finalApprovalData.applicationNumber}`);
+      }
+
+      // The loan number from ESS should match our generated alias
+      if (mapping.essLoanNumberAlias && mapping.essLoanNumberAlias !== essLoanNumberAlias) {
+        logger.warn(`⚠️ ESS loan number alias mismatch. Expected: ${mapping.essLoanNumberAlias}, Received: ${essLoanNumberAlias}`);
+      }
+
+      // Update with final approval data (loan number alias should already be set)
+      mapping.essLoanNumberAlias = essLoanNumberAlias; // Ensure it's set
+      mapping.status = 'FINAL_APPROVAL_RECEIVED';
+      mapping.finalApprovalReceivedAt = new Date();
+      mapping.metadata = {
+        ...mapping.metadata,
+        finalApprovalDetails: finalApprovalData
+      };
+
+      await mapping.save();
+      logger.info(`✅ Updated loan mapping with final approval for loan alias: ${essLoanNumberAlias}`);
+      return mapping;
+    } catch (error) {
+      logger.error('❌ Error updating loan mapping with final approval:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update mapping when MIFOS client is created
+   */
+  static async updateWithClientCreation(essLoanNumberAlias, mifosClientId) {
+    try {
+      const mapping = await LoanMapping.findOne({ essLoanNumberAlias });
+      if (!mapping) {
+        throw new Error(`No loan mapping found for ESS loan alias: ${essLoanNumberAlias}`);
+      }
+
+      mapping.mifosClientId = mifosClientId;
+      mapping.status = 'CLIENT_CREATED';
+      mapping.clientCreatedAt = new Date();
+
+      await mapping.save();
+      logger.info(`✅ Updated loan mapping with MIFOS client ID: ${mifosClientId}`);
+      return mapping;
+    } catch (error) {
+      logger.error('❌ Error updating loan mapping with client creation:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update mapping when MIFOS loan is created
+   */
+  static async updateWithLoanCreation(essLoanNumberAlias, mifosLoanId, mifosLoanAccountNumber) {
+    try {
+      const mapping = await LoanMapping.findOne({ essLoanNumberAlias });
+      if (!mapping) {
+        throw new Error(`No loan mapping found for ESS loan alias: ${essLoanNumberAlias}`);
+      }
+
+      mapping.mifosLoanId = mifosLoanId;
+      mapping.mifosLoanAccountNumber = mifosLoanAccountNumber;
+      mapping.status = 'LOAN_CREATED';
+      mapping.loanCreatedAt = new Date();
+
+      await mapping.save();
+      logger.info(`✅ Updated loan mapping with MIFOS loan ID: ${mifosLoanId}, Account: ${mifosLoanAccountNumber}`);
+      return mapping;
+    } catch (error) {
+      logger.error('❌ Error updating loan mapping with loan creation:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update mapping when loan is disbursed
+   */
+  static async updateWithDisbursement(mifosLoanId) {
+    try {
+      const mapping = await LoanMapping.findByMifosLoanId(mifosLoanId);
+      if (!mapping) {
+        throw new Error(`No loan mapping found for MIFOS loan ID: ${mifosLoanId}`);
+      }
+
+      mapping.status = 'DISBURSED';
+      mapping.disbursedAt = new Date();
+
+      await mapping.save();
+      logger.info(`✅ Updated loan mapping with disbursement for loan ID: ${mifosLoanId}`);
+      return mapping;
+    } catch (error) {
+      logger.error('❌ Error updating loan mapping with disbursement:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update mapping with loan final approval details
+   */
+  static async updateLoanMapping(loanData) {
+    try {
+        // Find by application number first
+        let mapping = await LoanMapping.findOne({ 
+            essApplicationNumber: loanData.essApplicationNumber
+        });
+
+        if (!mapping) {
+            // If no existing mapping found by application number, try loan number or FSP reference
+            mapping = await LoanMapping.findOne({
+                $or: [
+                    { essLoanNumberAlias: loanData.essLoanNumberAlias },
+                    { fspReferenceNumber: loanData.fspReferenceNumber }
+                ]
+            });
+        }
+
+        if (!mapping) {
+            // If still no mapping found, create a new one
+            mapping = new LoanMapping({
+                essApplicationNumber: loanData.essApplicationNumber,
+                essLoanNumberAlias: loanData.essLoanNumberAlias,
+                fspReferenceNumber: loanData.fspReferenceNumber,
+                productCode: loanData.productCode || "17", // Default product code
+                requestedAmount: loanData.requestedAmount || 5000000, // Default amount
+                tenure: loanData.tenure || 24, // Default tenure
+                status: loanData.status,
+                mifosClientId: loanData.mifosClientId,
+                metadata: loanData.metadata || {}
+            });
+
+            if (loanData.status === 'FINAL_APPROVAL_RECEIVED') {
+                mapping.finalApprovalReceivedAt = new Date();
+            } else if (loanData.status === 'DISBURSED') {
+                mapping.disbursedAt = new Date();
+            }
+        } else {
+            // Check if fspReferenceNumber would cause duplicate
+            if (loanData.fspReferenceNumber && loanData.fspReferenceNumber !== mapping.fspReferenceNumber) {
+                const existingWithFsp = await LoanMapping.findOne({ 
+                    fspReferenceNumber: loanData.fspReferenceNumber,
+                    essApplicationNumber: { $ne: loanData.essApplicationNumber }
+                });
+                
+                if (existingWithFsp) {
+                    logger.warn(`⚠️ FSP Reference ${loanData.fspReferenceNumber} already used by ${existingWithFsp.essApplicationNumber}, skipping fspReferenceNumber update`);
+                    // Remove fspReferenceNumber from update to avoid duplicate key error
+                    delete loanData.fspReferenceNumber;
+                }
+            }
+            
+            // Update fields that are provided in loanData
+            Object.keys(loanData).forEach(key => {
+                if (loanData[key] !== undefined && key !== '_id') {
+                    mapping[key] = loanData[key];
+                }
+            });
+
+            // Special handling for status transitions
+            if (loanData.status === 'FINAL_APPROVAL_RECEIVED' && !mapping.finalApprovalReceivedAt) {
+                mapping.finalApprovalReceivedAt = new Date();
+            } else if (loanData.status === 'DISBURSED' && !mapping.disbursedAt) {
+                mapping.disbursedAt = new Date();
+            }
+
+            // Special handling for metadata to prevent overwriting
+            if (loanData.metadata) {
+                mapping.metadata = {
+                    ...mapping.metadata,
+                    ...loanData.metadata
+                };
+            }
+        }
+
+        const savedMapping = await mapping.save();
+        logger.info('✅ Updated loan mapping:', {
+            applicationNumber: savedMapping.essApplicationNumber,
+            loanNumber: savedMapping.essLoanNumberAlias,
+            status: savedMapping.status,
+            requestedAmount: savedMapping.requestedAmount,
+            clientId: savedMapping.mifosClientId
+        });
+        return savedMapping;
+    } catch (error) {
+        logger.error('❌ Error updating loan mapping:', error);
+        throw error;
+    }
+  }
+
+  /**
+   * Get loan mapping by ESS loan number alias
+   */
+  static async getByEssLoanNumberAlias(essLoanNumberAlias, tenantId = null) {
+    try {
+      const mapping = await LoanMapping.findOne(this.scopeFilter({ essLoanNumberAlias }, tenantId)).lean();
+      if (!mapping) {
+        throw new Error(`No loan mapping found for ESS loan alias: ${essLoanNumberAlias}`);
+      }
+      return mapping;
+    } catch (error) {
+      logger.error('❌ Error retrieving loan mapping:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get loan mapping by ESS application number
+   * @param {string} essApplicationNumber - The ESS application number
+   * @param {boolean} includeInactive - Whether to include CANCELLED/REJECTED loans (default: true)
+   */
+  static async getByEssApplicationNumber(essApplicationNumber, includeInactive = true, tenantId = null) {
+    try {
+      const query = this.scopeFilter({
+        $or: [
+          { essApplicationNumber },
+          { restructureApplicationNumber: essApplicationNumber }
+        ]
+      }, tenantId);
+      
+      // Optionally exclude inactive statuses
+      if (!includeInactive) {
+        query.status = { $nin: ['CANCELLED', 'REJECTED'] };
+      }
+      
+      const mapping = await LoanMapping.findOne(query).lean();
+      if (!mapping) {
+        throw new Error(`No loan mapping found for ESS application: ${essApplicationNumber}`);
+      }
+      return mapping;
+    } catch (error) {
+      logger.error('❌ Error retrieving loan mapping:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get loan mapping by FSP reference number
+   */
+  static async getByFspReference(fspReferenceNumber, tenantId = null) {
+    try {
+      const mapping = await LoanMapping.findOne(this.scopeFilter({ fspReferenceNumber }, tenantId)).lean();
+      if (!mapping) {
+        throw new Error(`No loan mapping found for FSP reference: ${fspReferenceNumber}`);
+      }
+      return mapping;
+    } catch (error) {
+      logger.error('❌ Error retrieving loan mapping:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get loan mapping by MIFOS loan ID
+   */
+  static async getByMifosLoanId(mifosLoanId, tenantId = null) {
+    try {
+      const mapping = await LoanMapping.findOne(this.scopeFilter({ mifosLoanId }, tenantId)).lean();
+      if (!mapping) {
+        throw new Error(`No loan mapping found for MIFOS loan ID: ${mifosLoanId}`);
+      }
+      return mapping;
+    } catch (error) {
+      logger.error('❌ Error retrieving loan mapping:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Add error to mapping
+   */
+  static async addError(essLoanNumber, stage, error) {
+    try {
+      const mapping = await LoanMapping.findByEssLoanNumber(essLoanNumber);
+      if (mapping) {
+        await mapping.addError(stage, error);
+      }
+    } catch (error) {
+      logger.error('❌ Error adding error to loan mapping:', error);
+    }
+  }
+
+  /**
+   * Get all mappings by status
+   */
+  static async getByStatus(status) {
+    try {
+      return await LoanMapping.find({ status }).sort({ createdAt: -1 }).lean();
+    } catch (error) {
+      logger.error('❌ Error retrieving loan mappings by status:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get mapping statistics
+   */
+  static async getStats() {
+    try {
+      const stats = await LoanMapping.aggregate([
+        {
+          $group: {
+            _id: '$status',
+            count: { $sum: 1 }
+          }
+        }
+      ]);
+
+      const result = {};
+      stats.forEach(stat => {
+        result[stat._id] = stat.count;
+      });
+
+      return result;
+    } catch (error) {
+      logger.error('❌ Error getting loan mapping stats:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update loan mapping status with additional metadata
+   */
+  static async updateStatus(essApplicationNumber, newStatus, additionalData = {}, tenantId = null) {
+    try {
+      const update = {
+        status: newStatus,
+        updatedAt: new Date(),
+        ...additionalData
+      };
+
+      if (additionalData.metadata) {
+        const existing = await LoanMapping.findOne(this.scopeFilter({ essApplicationNumber }, tenantId));
+        if (existing && existing.metadata) {
+          update.metadata = {
+            ...existing.metadata,
+            ...additionalData.metadata
+          };
+        }
+      }
+
+      const mapping = await LoanMapping.findOneAndUpdate(
+        this.scopeFilter({ essApplicationNumber }, tenantId),
+        update,
+        { new: true }
+      );
+
+      if (!mapping) {
+        throw new Error(`Loan mapping not found for application: ${essApplicationNumber}`);
+      }
+
+      logger.info(`✅ Updated loan mapping status to ${newStatus} for application: ${essApplicationNumber}`);
+      return mapping;
+    } catch (error) {
+      logger.error('❌ Error updating loan mapping status:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get all loan mappings with detailed information for admin portal
+   */
+  static async getAllWithDetails(params = {}) {
+    try {
+      const {
+        page = 1,
+        limit = 20,
+        status,
+        excludeStatuses,
+        applicationNumber,
+        checkNumber,
+        clientName,
+        startDate,
+        endDate,
+        sort = 'createdAt',
+        order = 'desc',
+        tenantId = null
+      } = params;
+
+      const filter = this.scopeFilter({}, tenantId);
+
+      if (status && status !== '') {
+        filter.status = status;
+      } else if (excludeStatuses) {
+        const excluded = Array.isArray(excludeStatuses) ? excludeStatuses : [excludeStatuses];
+        if (excluded.length > 0) {
+          filter.status = { $nin: excluded };
+        }
+      }
+
+      if (applicationNumber && applicationNumber !== '') {
+        filter.essApplicationNumber = { $regex: applicationNumber, $options: 'i' };
+      }
+
+      if (checkNumber && checkNumber !== '') {
+        filter.essCheckNumber = { $regex: checkNumber, $options: 'i' };
+      }
+
+      if (clientName && clientName !== '') {
+        filter['metadata.clientData.firstName'] = { $regex: clientName, $options: 'i' };
+      }
+      
+      if (startDate || endDate) {
+        filter.createdAt = {};
+        if (startDate) {
+          filter.createdAt.$gte = new Date(startDate);
+        }
+        if (endDate) {
+          filter.createdAt.$lte = new Date(endDate + 'T23:59:59.999Z');
+        }
+      }
+
+      // Calculate pagination
+      const skip = (page - 1) * limit;
+      const sortOrder = order === 'desc' ? -1 : 1;
+      const sortObj = { [sort]: sortOrder };
+
+      // Execute query with pagination
+      const [loans, total] = await Promise.all([
+        LoanMapping.find(filter)
+          .sort(sortObj)
+          .skip(skip)
+          .limit(parseInt(limit))
+          .lean(),
+        LoanMapping.countDocuments(filter)
+      ]);
+
+      // Transform data for frontend compatibility
+      const transformedLoans = loans.map(loan => ({
+        _id: loan._id,
+        essApplicationNumber: loan.essApplicationNumber,
+        essCheckNumber: loan.essCheckNumber,
+        essLoanNumberAlias: loan.essLoanNumberAlias,
+        fspReferenceNumber: loan.fspReferenceNumber,
+        mifosClientId: loan.mifosClientId,
+        mifosLoanId: loan.mifosLoanId,
+        mifosLoanAccountNumber: loan.mifosLoanAccountNumber,
+        productCode: loan.productCode,
+        requestedAmount: loan.requestedAmount,
+        tenure: loan.tenure,
+        status: loan.status,
+        createdAt: loan.createdAt,
+        updatedAt: loan.updatedAt,
+        // Extract nested data for easier frontend access
+        clientData: loan.metadata?.clientData || null,
+        loanData: loan.metadata?.loanData || {
+          requestedAmount: loan.requestedAmount,
+          tenure: loan.tenure,
+          productCode: loan.productCode
+        },
+        employmentData: loan.metadata?.employmentData || null,
+        errors: loan.errors || [],
+        requestType: 'LOAN_APPLICATION' // Default for compatibility
+      }));
+
+      const pages = Math.ceil(total / limit);
+
+      logger.info(`📋 Retrieved ${transformedLoans.length} loans (page ${page}/${pages}, total: ${total})`);
+
+      return transformedLoans;
+    } catch (error) {
+      logger.error('❌ Error getting all loan mappings with details:', error);
+      throw error;
+    }
+  }
+
+  static async getById(id, tenantId = null) {
+    try {
+      const loan = await LoanMapping.findOne(this.scopeFilter({ _id: id }, tenantId)).lean();
+      if (!loan) return null;
+
+      return {
+        _id: loan._id,
+        essApplicationNumber: loan.essApplicationNumber,
+        essCheckNumber: loan.essCheckNumber,
+        essLoanNumberAlias: loan.essLoanNumberAlias,
+        fspReferenceNumber: loan.fspReferenceNumber,
+        mifosClientId: loan.mifosClientId,
+        mifosLoanId: loan.mifosLoanId,
+        mifosLoanAccountNumber: loan.mifosLoanAccountNumber,
+        productCode: loan.productCode,
+        requestedAmount: loan.requestedAmount,
+        tenure: loan.tenure,
+        status: loan.status,
+        createdAt: loan.createdAt,
+        updatedAt: loan.updatedAt,
+        clientData: loan.metadata?.clientData || null,
+        loanData: loan.metadata?.loanData || {
+          requestedAmount: loan.requestedAmount,
+          tenure: loan.tenure,
+          productCode: loan.productCode
+        },
+        employmentData: loan.metadata?.employmentData || null,
+        errors: loan.errors || [],
+        requestType: 'LOAN_APPLICATION'
+      };
+    } catch (error) {
+      logger.error('❌ Error getting loan mapping by id:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Suggestion logic for the manual message-trigger UI.
+   * Suggestions are additive hints only - allMessageTypes always contains the
+   * full selectable list, nothing is hard-blocked here.
+   */
+  static async getSuggestedMessages(identifier, tenantId = null) {
+    const MessageLog = require('../models/MessageLog');
+    const tid = this.resolveTenantId(tenantId);
+
+    let loanMapping = await this.getByEssApplicationNumber(identifier, true, tid);
+    if (!loanMapping) {
+      loanMapping = await this.getByEssLoanNumberAlias(identifier, tid);
+    }
+    if (!loanMapping) {
+      loanMapping = await this.getByMifosLoanId(identifier, tid);
+    }
+
+    if (!loanMapping) {
+      const error = new Error('Loan mapping not found');
+      error.statusCode = 404;
+      throw error;
+    }
+
+    const allMessageTypes = [
+      'RESPONSE',
+      'ACCOUNT_VALIDATION_RESPONSE',
+      'DEFAULTER_DETAILS_TO_EMPLOYER',
+      'FSP_BRANCHES',
+      'FULL_LOAN_REPAYMENT_NOTIFICATION',
+      'FULL_LOAN_REPAYMENT_REQUEST',
+      'LOAN_CHARGES_RESPONSE',
+      'LOAN_DISBURSEMENT_FAILURE_NOTIFICATION',
+      'LOAN_DISBURSEMENT_NOTIFICATION',
+      'LOAN_INITIAL_APPROVAL_NOTIFICATION',
+      'LOAN_LIQUIDATION_NOTIFICATION',
+      'LOAN_RESTRUCTURE_AFFORDABILITY_REQUEST',
+      'LOAN_RESTRUCTURE_AFFORDABILITY_RESPONSE',
+      'LOAN_RESTRUCTURE_BALANCE_REQUEST',
+      'LOAN_RESTRUCTURE_BALANCE_RESPONSE',
+      'LOAN_RESTRUCTURE_REQUEST_FSP',
+      'LOAN_STATUS_REQUEST',
+      'LOAN_TAKEOVER_BALANCE_RESPONSE',
+      'LOAN_TOP_UP_BALANCE_RESPONSE',
+      'PARTIAL_LOAN_REPAYMENT_NOTIFICATION',
+      'PARTIAL_REPAYMENT_OFF_BALANCE_RESPONSE',
+      'PAYMENT_ACKNOWLEDGMENT_NOTIFICATION',
+      'PRODUCT_DECOMMISSION',
+      'PRODUCT_DETAIL',
+      'TAKEOVER_DISBURSEMENT_NOTIFICATION'
+    ];
+
+    const suggested = [];
+    const addSuggestion = (messageType, reason) => {
+      if (suggested.some((s) => s.messageType === messageType)) return;
+      const entry = { messageType, reason };
+      if (messageType === 'LOAN_LIQUIDATION_NOTIFICATION') {
+        entry.requiresConfirmation = true;
+      }
+      suggested.push(entry);
+    };
+
+    // Always available regardless of loan state.
+    addSuggestion('LOAN_STATUS_REQUEST', 'always_available');
+
+    // Outbound-confirmed: has a disbursement notification actually been logged for this loan?
+    const disbursementLoggedFilter = this.scopeFilter(
+      {
+        messageType: { $in: ['LOAN_DISBURSEMENT_NOTIFICATION', 'TAKEOVER_DISBURSEMENT_NOTIFICATION'] },
+        $or: [
+          { loanNumber: loanMapping.essLoanNumberAlias },
+          { applicationNumber: loanMapping.essApplicationNumber }
+        ]
+      },
+      tid
+    );
+    const disbursementLogged = await MessageLog.exists(disbursementLoggedFilter);
+    if (disbursementLogged) {
+      addSuggestion('FULL_LOAN_REPAYMENT_NOTIFICATION', 'message_logged:disbursement');
+      addSuggestion('LOAN_LIQUIDATION_NOTIFICATION', 'message_logged:disbursement');
+    }
+
+    // Status-driven: MessageLog can't be queried for these inbound types today (not in its enum),
+    // so these rules key off LoanMapping.status/originalMessageType instead.
+    const { status, originalMessageType } = loanMapping;
+
+    const offerRequestTypes = ['LOAN_OFFER_REQUEST', 'TOP_UP_OFFER_REQUEST', 'LOAN_TAKEOVER_OFFER_REQUEST'];
+    if (offerRequestTypes.includes(originalMessageType) && ['OFFER_SUBMITTED', 'INITIAL_APPROVAL_SENT'].includes(status)) {
+      addSuggestion('LOAN_INITIAL_APPROVAL_NOTIFICATION', `status:${status}`);
+    }
+
+    if (originalMessageType === 'LOAN_RESTRUCTURE_REQUEST' && status === 'RESTRUCTURE_INITIAL_APPROVAL_SENT') {
+      addSuggestion('LOAN_INITIAL_APPROVAL_NOTIFICATION', `status:${status}`);
+    }
+
+    if (['FINAL_APPROVAL_RECEIVED', 'DISBURSED'].includes(status)) {
+      addSuggestion('LOAN_DISBURSEMENT_NOTIFICATION', `status:${status}`);
+      addSuggestion('LOAN_DISBURSEMENT_FAILURE_NOTIFICATION', `status:${status}`);
+      addSuggestion('TAKEOVER_DISBURSEMENT_NOTIFICATION', `status:${status}`);
+    }
+
+    if (['CLOSED', 'PAYMENT_FAILED'].includes(status)) {
+      addSuggestion('PAYMENT_ACKNOWLEDGMENT_NOTIFICATION', `status:${status}`);
+    }
+
+    return {
+      loanStatus: status,
+      suggested,
+      allMessageTypes
+    };
+  }
+}
+
+module.exports = LoanMappingService;

@@ -1,0 +1,11 @@
+node_modules/
+.env
+.env.*
+!.env.example
+keys/
+*.pem
+*.pid
+logs/
+generated-documents/
+archive/
+.claude/

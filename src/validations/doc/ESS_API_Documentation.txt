@@ -1,0 +1,2603 @@
+THE UNITED REPUBLIC OF TANZANIA 
+ 
+ 
+PRESIDENT'S OFFICE PUBLIC SERVICE MANAGEMENT AND GOOD GOVERNANCE 
+ 
+ 
+ 
+ 
+e-MKOPO API DOCUMENTATION 
+ 
+ 
+ 
+ 
+ 
+MAY 2025 
+ 
+ 
+Version 1.0.11 
+ 	 
+  
+
+Document Description  
+Document Name Owner Document Type e-MKOPO API Documentation PO-PSMGG For Public Consumption  
+  
+Document Version Control  
+Version Date Change Description 1.0.11 May 2025 Product Details, Deduction stop notification to FSP and Loan Restructuring  
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Table of Contents 
+1.  PREREQUISITES	1 
+2.  REQUEST FLOW	2 
+2.1 PRODUCT CATALOG	2 
+2.1.1 Product Catalogs Commission	2 
+2.1.2 Product Decommission	5 
+2.2 NEW LOAN	6 
+2.2.1 Possible Loan Charges Request from Employee to FSP	7 
+2.2.2 Possible Loan Charges Response from FSP to Employee	9 
+2.2.3 Loan Offer Request from Employee to FSP	11 
+2.2.4 Loan Offer Approval Notification from FSP to ESS	14 
+2.2.5 Loan Verification and Approval	15 
+2.2.6 Disbursement Notification from FSP to ESS	16 
+2.2.7 Disbursement Failure Notification from FSP to ESS	17 
+2.2.8 Loan Cancellation	18 
+2.3 LOAN TOPUP	19 
+2.3.1 Pay Off Balance Request to FSP	20 
+2.3.2 Settlement Balance Response From FSP	21 
+2.3.3 Possible Loan Charges Request from Employee to FSP	22 
+2.3.4 Possible Loan Charges Response From FSP	24 
+2.3.5 Loan Top Up Request from Employee to FSP	25 
+2.3.6 Loan Offer Approval Notification from FSP to ESS	28 
+2.3.7 Top Up Verification and Approval	29 
+2.3.8 Disbursement Notification from FSP to ESS	30 
+2.3.9 Disbursement Failure Notification from FSP to ESS	31 
+2.3.10 Top up Cancellation	32 
+2.3.11 Employee Cancellation Notification to FSP	32 
+2.4 LOAN RESTRUCTURING	34 
+2.4.2 Loan restructuring initiated by FSP	34 
+2.4.3 Employee Request Loan Balance from FSP	34 
+2.4.4 Loan Restructuring Balance Response From FSP	36 
+2.4.5 FSP Initiate Loan Restructuring Request	37 
+2.4.6 Loan Restructuring Affordability Request	38 
+2.4.7 Possible Loan Restructuring Charges Response from FSP to Employee	40 
+2.4.8 Loan Restructuring Request from Employee to FSP	41 
+2.4.9 Restructuring Request Approval Notification from FSP to ESS	44 
+2.4.10 Restructuring Verification and Approval	45 
+2.4.11 Employee Cancellation Notification to FSP	46 
+2.4.12 Loan Restructuring Rejection Notification from employee to FSP	47 
+2.4.13 Loan Restructured Notification from FSP to ESS	48 
+2.4.14 Loan Restructured Failure Notification from FSP to ESS	49 
+2.5 LOAN TAKEOVER	50 
+2.5.1 Loan Takeover Balance and Payment Details Request to FSP1	50 
+2.5.2 Loan Takeover Balance and Payment Details Response from FSP1	52 
+2.5.3 Loan Takeover Charges Request from Employee to FSP	53 
+2.5.4 Possible Loan Takeover Charges Response from FSP to Employee	55 
+2.5.5 Loan Takeover Request from Employee to FSP2	56 
+2.5.6 Loan Takeover Approval Notification from FSP2 to Employee	60 
+2.5.7 Loan Takeover Cancel/Rejection by Employee to FSP2	61 
+2.5.8 Loan Takeover Employer Approval Notification	62 
+2.5.9 Disbursement Notification from FSP2 to ESS	63 
+2.5.10 Disbursement Failure Notification from FSP2 to ESS	65 
+2.5.11 Payment Notification from ESS to FSP1	65 
+2.5.12 Payment Acknowledgment Notification from FSP1 to ESS	67 
+2.6 LOAN MONITORING AND REPAYMENTS	68 
+2.6.1 Loan Repayments from Employer/Month Deduction	68 
+2.6.2 Loan Repayments from Employee	70 
+2.6.3 Monthly Deduction record to FSP	79 
+2.6.4 Loan Liquidation notification message	81 
+2.6.5 Loan Status Request	81 
+2.6.6 Loan Status Response	82 
+2.7 DEDUCTION STOP NOTIFICATION AND LOAN DEFAULTS RECOVERY	82 
+2.7.1 Defaulter Details from FSP to Employer	83 
+2.7.2 Defaulter details from employer to FSP	84 
+2.7.3 Deduction Stop Notification to FSP	85 
+2.8 ACCOUNT VALIDATION, FSP BRANCHES AND GENERAL RESPONSE	86 
+2.8.1 Account validation Request to FSP	86 
+2.8.2 Account validation Response from FSP	87 
+2.8.3 FSP branches	88 
+2.8.4 General Response Message	89 
+3 DIGITAL SIGNATURE SECURITY	90 
+3.1 Overview	90 
+3.2 Digital Signature	90 
+3.3 Digital Signature File Format	90 
+3.4 Signature Algorithm	90 
+3.5 Signed Final Payload Format	90 
+4 APPENDICES	91 
+4.1 Loan states	91 
+4.2 Loan state transition	92 
+4.3 Response Code	92 
+
+ 
+ 
+
+1. 	PREREQUISITES  
+ 
+i. Network Connection 
+ 
+Integrating institutions should have network connection from their system accessible to GovESB. 
+  
+ii. Institution System 
+Integrating institution should have a working system that is ready to integrate without a need for manual intervention. 
+ 
+iii. API Endpoints 
+All requests from the institution system shall be received at different ends based on different APIs. 
+ 	 
+
+2. 	REQUEST FLOW  
+ 
+API REQUEST FLOW  
+2.1 PRODUCT CATALOG 
+The product catalogs shall be offered to ESS from FSP Systems, these catalogs shall serve as starting point where Employees traverse to find their suitable packages. These catalogs will be availed to Employee at any given instance. The process shall involve FSP Systems pushing Catalog details to ESS at a stipulated timed interval, and ESSs shall send acknowledgment response upon receipt of every transaction. 
+2.1.1 Product Catalogs Commission 
+Flow: 
+i. 	FSP push product offering to ESS ii. 	Employer register employee details into government employee system  iii. 	Employee login to government platforms  
+	iv. 	Employee preview product offering  
+ 
+A. Product catalog push details  
+S/N Item Name Item description Type Optional 1 FSP code FSP identification Varchar (10) NO 2 FSP name FSP description Varchar (100) NO 3 Product code Product identification Varchar (8) NO 4 Product name Product description Varchar (255) NO 5 Minimum Tenure Minimum repayment period Number (3) NO 6 Maximum 
+Tenure Maximum repayment period Number (3) NO 7 Interest rate Interest rate amount Number (3,2) NO 8 Processing fee Cost of loan processing percentage Number (3,2) YES 9 Insurance Loan cover percentage Number (3,2) NO 10 Amount Min & Max loan product amount Number (38,2) NO 11 Repayment type Frequency of loan repayment Varchar (10) YES 12 Terms and condition List of terms and condition Check below NO 13 Product 
+Description Short and useful Product details description Varchar (255) YES 14 For Executive Identification if product is for executive employee or for all (true if is for executive and false if is for all) Boolean No 15 Deduction code Unique deduction number 
+that identifies FSP deduction Varchar (10) NO 16 Insurance Type Type of insurance cover (up 
+front/at once or distributed/each month) Varchar (50) NO 17 Sharia Facility Identification if product is for Sharia Facility or not (true if is Sharia Facility and false if not) Boolean No  
+B. Terms and condition 
+S/N Item Name Item description Type Optional   1 Terms Condition Number Terms and Condition Number Varchar (20)  NO   2 Description Terms and Condition Description Varchar (255) NO   3 TC Effective Date Terms and Condition Effective Date Date NO  
+Message 01 
+<Document><Data> 
+        <Header> 
+            <Sender>ZE DONE</Sender> 
+            <Receiver>ESS_UTUMISHI</Receiver> 
+            <FSPCode>FL8090</FSPCode> 
+            <MsgId>FSP123467020</MsgId> 
+            <MessageType>PRODUCT_DETAIL</MessageType> 
+        </Header> 
+        <MessageDetails> 
+            <DeductionCode>FL0001</DeductionCode> 
+            <ProductCode>LFL8090</ProductCode> 
+            <ProductName>Mkopo wa Simu</ProductName> 
+            <ProductDescription>Mkopo Elimu</ProductDescription> 
+            <ForExecutive>false</ForExecutive> 
+            <MinimumTenure>12</MinimumTenure> 
+            <MaximumTenure>24</MaximumTenure> 
+            <InterestRate>10.00</InterestRate> 
+            <ProcessFee>15.00</ProcessFee> 
+            <Insurance>0.75</Insurance> 
+            <MaxAmount>5000000</MaxAmount>             <MinAmount>100000</MinAmount> 
+            <RepaymentType>Flat</RepaymentType> 
+            <Currency>TZS</Currency> 
+	 	<InsuranceType> DISTRIBUTED || UP_FRONT</InsuranceType> 
+	 	<ShariaFacility>true</ShariaFacility> 
+            <TermsCondition> 
+                <TermsConditionNumber>123456</TermsConditionNumber> 
+                <Description>Payment Must be Made in Full</Description> 
+                <TCEffectiveDate>2024-02-22</TCEffectiveDate> 
+            </TermsCondition> 
+            <TermsCondition> 
+                <TermsConditionNumber>123457</TermsConditionNumber> 
+                <Description>Load must be paid within time</Description> 
+                <TCEffectiveDate>2024-02-22</TCEffectiveDate> 
+            </TermsCondition> 
+        </MessageDetails> 
+        <MessageDetails> 
+            <DeductionCode>FL0002</DeductionCode> 
+            <ProductCode>LA1002</ProductCode> 
+            <ProductName>Mkopo Wa Fedha</ProductName> 
+            <ProductDescription>Mkopo Kwa Watumishi</ProductDescription> 
+            <ForExecutive>false</ForExecutive> 
+            <MinimumTenure>12</MinimumTenure> 
+            <MaximumTenure>24</MaximumTenure> 
+            <InterestRate>0.05</InterestRate> 
+            <ProcessFee>5.00</ProcessFee> 
+            <Insurance>7.00</Insurance> 
+            <MaxAmount>5000000.80</MaxAmount> 
+            <MinAmount>100000</MinAmount> 
+            <RepaymentType>Flat</RepaymentType> 
+            <Currency>TZS</Currency> 
+	 	<InsuranceType> DISTRIBUTED || UP_FRONT</InsuranceType> 
+	 	<ShariaFacility>false</ShariaFacility> 
+            <TermsCondition> 
+                <TermsConditionNumber>123456</TermsConditionNumber> 
+                <Description>Payment Must be Made in Full</Description> 
+                <TCEffectiveDate>2024-02-22</TCEffectiveDate> 
+            </TermsCondition> 
+            <TermsCondition> 
+                <TermsConditionNumber>123457</TermsConditionNumber> 
+                <Description>Load must be paid within time</Description> 
+                <TCEffectiveDate>2024-02-22</TCEffectiveDate> 
+            </TermsCondition> 
+        </MessageDetails> 
+    </Data> 
+    <Signature>XYZ</Signature> 
+</Document> 
+ 	 
+2.1.2 Product Decommission 
+S/N Item Name Item description Type Optional    1 FSP code FSP identification Varchar (10) NO   2 Product code Product identification Varchar (8) NO Message 02 
+<Document> 
+	 	<Data> 
+	 	 	<Header> 
+	 	 	 	<Sender>ZE DONE</Sender> 
+	 	 	 	<Receiver>ESS_UTUMISHI</Receiver> 
+	 	 	 	<FSPCode>FL8090</FSPCode> 
+	 	 	 	<MsgId>FSP12346</MsgId> 
+	 	 	<MessageType>PRODUCT_DECOMMISSION</MessageType> 
+	 	 	</Header> 
+	 	 	<MessageDetails> 
+	 	 	 	<ProductCode>AA123456</ProductCode> 
+	 	 	</MessageDetails> 
+	 	 	<MessageDetails> 
+	 	 	 	<ProductCode>AA123457</ProductCode> 
+	 	 	</MessageDetails> 
+	 	</Data> 
+	 	<Signature>XYZ</Signature> 
+</Document> 
+ 	 
+2.2 NEW LOAN 
+This part explain how employees will, after studying loan catalogs and choosing their preferred load category, request loan from FSP, FSP responses and the approval work flow from Employee to FSP to Employer and back to FSP for final approval and disbursement. 
+i. 	Employee login to government platforms ii. 	Employee select product and FSP iii. 	Employee applies for loan iv. 	FSP receive and validate employee loan details  
+v. 	FSP decide and reply on loan offer to employee  vi. 	Employee receive loan offer  vii. Employee decides on the offer  
+viii. Employee submit loan application and deduction details to Employer  ix. 	Employer approves the loan application  x. 	Employer initiates loan deduction xi. 	FSP and employee receive notification of initiated deduction xii. FSP disburse loan 
+	xiii. Employee receive amount credit notification 	 
+
+2.2.1 Possible Loan Charges Request from Employee to FSP 
+This is on demand and sync API request to get possible loan charges from FSP 
+S/N Item Name Item description Type Optional 1 Check number Employee identification Number (9) NO 2 Designation code Designation Identification Varchar (8) NO 3 Designation name Designation description Varchar (255) NO 4 Basic Salary Basic salary Number (38,2) NO 5 Net salary Amount after deduction Number (38,2) NO 6 One third amount Minimum amount after deduction Number (38,2) NO 5 Deductible amount Net salary – 1/3 amount Number (38,2) NO 6 Retirement date Employee retirement year - birth date Number (3) NO 7 Terms of employment Permanent or Contractual Varchar (30) NO 8 Requested amount Loan amount Number (38,2) YES 9 Desired deductible amount Desired deduction amount Number (38,2) YES 10 Tenure Repayment period Number (3) YES 11 FSP code FSP identification Varchar (10) NO 12 Product code Product identification Varchar (8) NO 13 Vote Code Vote/institution identification code Varchar (10) NO 14 Total Employee Deduction Total existing employee deduction amount Number (38,2) NO 15 Job class code Identifier for a Group of Designations Varchar (10) NO  
+     
+Message 03 <Document> 
+ <Data> 
+ 	<Header> 
+ 	 	<Sender>ESS_UTUMISHI</Sender> 
+ 	 	<Receiver>FSPSystem</Receiver> 
+ 	 	<FSPCode>1001</FSPCode> 
+ 	 	<MsgId>90769af68ef011ecb3a6432feaa9296f</MsgId> 
+ 	 	<MessageType>LOAN_CHARGES_REQUEST</MessageType> 
+ 	</Header> 
+ 	 	<MessageDetails> 
+ 	 	 	<CheckNumber>111222333</CheckNumber> 
+ 	 	 	<DesignationCode>TZ800186</DesignationCode> 
+                                <DesignationName>ICTO II 
+                                 </DesignationName> 
+ 	 	 	<BasicSalary>5000.00</BasicSalary> 
+ 	 	 	<NetSalary>10000.00</NetSalary> 
+ 	 	 	<OneThirdAmount>12000.00</OneThirdAmount> 
+ 	 	 	<RequestedAmount>5000.00</RequestedAmount> 
+ 	 	 	<DeductibleAmount>12000.00</DeductibleAmount> 
+                                 <DesiredDeductibleAmount>12000.00 
+                                 </DesiredDeductibleAmount> 
+ 	 	 	<RetirementDate>3</RetirementDate> 
+ 	 	 	<TermsOfEmployment>Permanent and Pensionable 
+                                  </TermsOfEmployment> 
+ 	 	 	<Tenure>45</Tenure> 
+ 	 	 	<ProductCode>22346</ProductCode> 
+ 	 	 	<VoteCode>32</VoteCode> 
+ 	 	<TotalEmployeeDeduction>120000.00</TotalEmployeeDeduction> 
+                                  <JobClassCode>JB0012</JobClassCode> 
+ 	 	</MessageDetails> 
+ 	</Data> 
+ 	<Signature>Signature</Signature> 
+</Document> 	 
+2.2.2 Possible Loan Charges Response from FSP to Employee 
+S/N Item Name Item description Type Optional 1 Desired deductible amount Desired deduction amount Number (38,2) YES 2 Total Insurance Total Loan Insurance charges Number (38,2) NO 3 Total 
+Processing Fees Total Loan Processing Fees charges Number (38,2) YES 4 Total Interest Rate Amount Total Loan Interest Rate amount charges Number (38,2) NO 5 Other Charges Total Loan Other Charges Number (38,2) YES 6 Net Loan Amount Total Net Loan Amount employee can get Number (38,2) NO 7 Total Amount to Pay Total Amount employee can pay back Number (38,2) NO 8 Tenure Repayment period Number (3) NO 9 Eligible Amount Maximum loan employee can get Number (38,2) YES 10 Monthly Return Amount Amount employee can return in each month Number (38,2) NO Message 04 
+<Document> 
+ <Data> 
+ 	<Header> 
+ 	 	<Sender>ESS_UTUMISHI</Sender> 
+ 	 	<Receiver>FSPName</Receiver> 
+ 	 	<FSPCode>FL8090</FSPCode> 
+ 	 	<MsgId>90769af68ef011ecb3a6432feaa9296f</MsgId> 
+ 	 	<MessageType>LOAN_CHARGES_RESPONSE</MessageType> 
+ 	</Header> 
+ 	 	<MessageDetails> 
+ 	 	<DesiredDeductibleAmount>5000.00</DesiredDeductibleAmount> 
+ 	 	<TotalInsurance>5000.00</TotalInsurance> 
+ 	 	<TotalProcessingFees>100.00</TotalProcessingFees> 
+ 	 	<TotalInterestRateAmount>5000.00</TotalInterestRateAmount> 
+ 	 	<OtherCharges>12000.00</OtherCharges> 
+ 	 	<NetLoanAmount>12000.00</NetLoanAmount>  	 	<TotalAmountToPay>12000.00</TotalAmountToPay> 
+ 	 	<Tenure>36</Tenure> 
+ 	 	<EligibleAmount>6731040.52</EligibleAmount> 
+ 	 	<MonthlyReturnAmount>10000.52</MonthlyReturnAmount> 
+ 	</MessageDetails> 
+ 	</Data> 
+ 	<Signature>Signature</Signature> 
+</Document> 	 
+
+2.2.3 Loan Offer Request from Employee to FSP 
+S/N Item Name Item description Type Optional 1 Check number Employee identification Number (9) NO 2 First Name Employee First Name Varchar (30) NO 3 Middle Name Employee Middle Name Varchar (30) NO 4 Last Name Employee Last Name Varchar (30) NO 5 Sex Employee sex Varchar (1) NO 6 Employment Date Employee employment date Varchar (10) NO 7 Marital Status Employee marital status Varchar (10) NO 8 Confirmation Date Employee confirmation date Varchar (10) YES 9 Bank Account Number Employee bank account number Varchar (20) NO 10 Nearest Branch 
+Name Employee nearest bank branch Varchar (50) YES 11 Nearest Branch Code Employee nearest bank code Varchar (50) YES 12 Vote code Employer identification Varchar (6) NO 13 Vote name Employer name Varchar (255) NO 14 NIN National identification number Varchar (22) NO 15 Designation code Designation Identification Varchar (8) NO 16 Designation name Designation description Varchar (255) NO 17 Basic Salary Basic salary Number (38,2) NO 18 Net salary Amount after deduction Number (38,2) NO 19 One third amount Minimum amount after deduction Number (38,2) NO 20  Total 
+Employee 
+Deduction Total existing employee deduction amount Number (38,2) NO 21 Retirement date Employee retirement year - birth date Number (3) NO 22 Terms of employment Permanent or Contractual Varchar (30) NO 23 Requested amount Loan amount Number (38,2) YES 24 Desired deductible amount Desired deduction amount Number (38,2) YES 25 Tenure Repayment period Number (3) NO 26 FSP code FSP identification Varchar (10) NO 27 Product code Product identification Varchar (8) NO 28 Interest rate Interest rate amount Number (3,2) NO 28 Processing fee Cost of loan processing percentage Number (3,2) NO 29 Insurance Loan cover percentage Number (3,2) NO 30 Physical address Physical address Varchar (50) NO 31 Telephone number Telephone number Varchar (12) YES 32 Email address Email address Varchar (50) NO 33 Mobile number Mobile number Varchar (12) NO 34 Application number Loan application identification Varchar (15) NO 35 Loan Purpose Reason for loan request Varchar (250) NO 36 Contract Start Date Employee contract start date (Optional) Varchar (10) YES 37 Contract End Date Employee contract end date (Optional) Varchar (10) YES 38 Swift Code bank swift code Varchar (50) No 39 Funding Employee source of salary payment Varchar (50) No  
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+Message 05
+<Document> 
+ <Data> 
+ 	<Header> 
+ 	 	<Sender>ESS_UTUMISHI</Sender> 
+ 	 	<Receiver>FSPSystem</Receiver> 
+ 	 	<FSPCode>1001</FSPCode> 
+ 	 	<MsgId>90769af68ef011ecb3a6432feaa9296f</MsgId> 
+ 	 	<MessageType>LOAN_OFFER_REQUEST</MessageType> 
+ 	</Header> 
+ 	 	<MessageDetails> 
+ 	 	 	<CheckNumber>111222333</CheckNumber> 
+ 	 	 	<FirstName>Juma</FirstName> 
+ 	 	 	<MiddleName>Ponda</MiddleName> 
+ 	 	 	<LastName>Mali</LastName> 
+ 	 	 	<Sex>M</Sex> 	 	 	 	 	  	  	 
+ 	 	<BankAccountNumber>011445888578</BankAccountNumber> 
+            	 	 	 <EmploymentDate>2020-07-01</EmploymentDate> 
+            	 	 	 <MaritalStatus>Married</MaritalStatus> 
+             	 	<ConfirmationDate>2021-07-01</ConfirmationDate> 
+      	 	 	 <TotalEmployeeDeduction>205500</TotalEmployeeDeduction> 
+ 	 	 	<NearestBranchName>A Manyoni</NearestBranchName> 
+ 	 	 	<NearestBranchCode>AX002</NearestBranchCode> 
+ 	 	 	<VoteCode>32</VoteCode> 
+ 	 	 	<VoteName>XYZ</VoteName> 
+ 	 	 	<NIN>19870527111450000124</NIN> 
+ 	 	 	<DesignationCode>TZ800186</DesignationCode> 
+ 	 	 	<DesignationName>ICTOII</DesignationName> 
+ 	 	 	<BasicSalary>5000.00</BasicSalary> 
+ 	 	 	<NetSalary>100.00</NetSalary> 
+ 	 	 	<OneThirdAmount>120000.00</OneThirdAmount> 
+ 	 	 	<RequestedAmount>5000.00</RequestedAmount> 
+ 	 	             <DesiredDeductibleAmount>12000.00 
+                                  </DesiredDeductibleAmount> 
+ 	 	 	<RetirementDate>3</RetirementDate> 
+ 	 	 	<TermsOfEmployment>Permanent and Pensionable 
+                                  </TermsOfEmployment> 
+ 	 	 	<Tenure>45</Tenure> 
+ 	 	 	<ProductCode>22346</ProductCode> 
+ 	 	 	<InterestRate>20.00</InterestRate> 
+ 	 	 	<ProcessingFee>200.00</ProcessingFee> 
+ 	 	 	<Insurance>500.00</Insurance> 
+ 	 	 	<PhysicalAddress>Arusha</PhysicalAddress> 
+ 	 	 	<EmailAddress>abc.abc@instution.com</EmailAddress> 
+ 	 	 	<MobileNumber>0758484339</MobileNumber> 
+ 	 	 	<ApplicationNumber>0021000</ApplicationNumber> 
+ 	 	 	<LoanPurpose> Mkopo wakujenga nyumba </LoanPurpose> 
+ 	 	 	<ContractStartDate>2011-02-25</ContractStartDate> 
+ 	 	 	<ContractEndDate>2025-02-25 </ContractEndDate> 
+                                 <SwiftCode>AXB02</SwiftCode> 
+ 	 	           <Funding>OS</Funding>  	 	 
+ 	 	</MessageDetails> 
+ 	</Data> 
+ 	<Signature>Signature</Signature> 
+</Document> 
+ 
+2.2.4 Loan Offer Approval Notification from FSP to ESS         
+This is an API to notify ESS on submitted loan offer approval (Accepted or Rejected). 
+S/ N Item Name Item description Type Optional 1 Application number Loan application identification Varchar (18) NO 2 Reason Reason for offer rejection Varchar (150) YES 3 FSP 
+Reference number Unique FSP Reference number corresponding to request Varchar (20) YES 4 Other charges Other charges Number (38,2) YES 5 Approval APPROVED|| REJECTED Varchar (10) NO 6 Loan Number Unique FSP number 
+that identify loan application Varchar (20) YES  
+ 
+Message 06
+<Document>
+ 	<Data> 
+ 	 	<Header> 
+ 	 	 	<Sender>ZE DONE</Sender> 
+ 	 	 	<Receiver>ESS_UTUMISHI</Receiver> 
+ 	 	 	<FSPCode>1001</FSPCode> 
+ 	 	 	<MsgId>FSP1234</MsgId> 
+<MessageType>LOAN_INITIAL_APPROVAL_NOTIFICATION</MessageType> 
+ 	 	</Header> 
+ 	 	<MessageDetails> 
+ 	 	<ApplicationNumber>ESS1678796729374</ApplicationNumber> 
+ 	 	 	<Reason>Ok</Reason> 
+ 	 	 	<FSPReferenceNumber>TZ0010</FSPReferenceNumber> 
+ 	 	 	<LoanNumber>20070001</LoanNumber> 
+ 	 	 	<TotalAmountToPay>2500000.58</TotalAmountToPay> 
+ 	 	 	<OtherCharges>2500.05</OtherCharges> 
+ 	 	 	<Approval>APPROVED</Approval> 
+ 	 	</MessageDetails> 
+ 	</Data> 
+ 	<Signature>XYZ</Signature> 
+</Document> 
+ 
+2.2.5 Loan Verification and Approval  
+Loan Approval Status Notification to FSP 
+S/N Item Name Item description Type Optional 1 Application number Loan application identification Varchar (15) NO 2 Reason Reason for offer rejection Varchar (150) YES 3 FSP Reference number Unique FSP Reference number corresponding to request Varchar (20) NO 4 Approval APPROVED || REJECTED Varchar (10) NO 5 Loan Number Unique FSP number that identify loan application Varchar (20) YES  
+ 
+ 
+ 
+ 
+ 
+Message 07
+<Document> 
+     <Data> 
+<Header> 
+   <Sender>ESS_UTUMISHI</Sender> 
+   <Receiver>FSPSystem</Receiver> 
+   <FSPCode>FL8090</FSPCode> 
+   <MsgId>FSP1234</MsgId>  
+<MessageType>LOAN_FINAL_APPROVAL_NOTIFICATION</MessageType>  </Header> 
+ <MessageDetails> 
+         <ApplicationNumber>ESS101</ApplicationNumber> 
+         <Reason>Not allowed</Reason> 
+          <FSPReferenceNumber>TZ001</FSPReferenceNumber> 
+          <LoanNumber>20070001</LoanNumber> 
+           <Approval>APPROVED || REJECTED</Approval> 
+           </MessageDetails></Data>         
+<Signature>XYZ</Signature> 
+</Document> 
+2.2.6 Disbursement Notification from FSP to ESS 
+ 
+S/N Item Name Item description Type Optional 1 Application number Loan application identification Varchar (15) NO 2 FSP 
+Reference number Unique FSP Reference number corresponding to request Varchar (20) NO 3 Loan Number Unique FSP number that identify loan application Varchar (20) NO 4 Total Amount to pay Total Amount to pay Number (38,2) YES 5 Disbursemen
+t date Disbursement date String NO  
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+Message 08
+<Document>
+  <Data> 
+ <Header> 
+ 	 	<Sender>ZE DONE</Sender> 
+ 	 	<Receiver>ESS_UTUMISHI</Receiver> 
+ 	 	<FSPCode>1001</FSPCode> 
+ 	 	<MsgId>FSP1234</MsgId>  
+ 	<MessageType>LOAN_DISBURSEMENT_NOTIFICATION</MessageType> 
+ 	</Header> 
+            <MessageDetails> 
+                <ApplicationNumber>1002</ApplicationNumber> 
+                <Reason>I have desired not to apply</Reason> 
+                <FSPReferenceNumber>TZ001</FSPReferenceNumber> 
+                <LoanNumber>20070001</LoanNumber> 
+                <TotalAmountToPay>2500000</TotalAmountToPay> 
+                <DisbursementDate>2022-05-26T21:32:52</DisbursementDate> 
+            </MessageDetails> 
+    </Data>   
+ 	<Signature>XYZ</Signature> 
+</Document> 
+ 
+2.2.7 Disbursement Failure Notification from FSP to ESS 
+ 
+S/N Item Name Item description Type Optional 1 Application number Loan application identification Varchar (15) NO 2 Reason Description why disburseme
+nt failure Varchar (255) NO  
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+Message 09
+<Document> 
+ 	<Data> 
+ 	 	<Header> 
+ 	 	 	<Sender>ZE DONE</Sender> 
+ 	 	 	<Receiver>ESS_UTUMISHI</Receiver> 
+ 	 	 	<FSPCode>1001</FSPCode> 
+ 	 	 	<MsgId>FSP12346</MsgId> 
+<MessageType>LOAN_DISBURSEMENT_FAILURE_NOTIFICATION</MessageType> 
+ 	 	</Header> 
+ 	 	<MessageDetails> 
+ 	 	 	<ApplicationNumber>A1002</ApplicationNumber> 
+ 	 	 	<Reason>technical error</Reason> 
+ 	 	</MessageDetails> 
+ 	</Data> 
+ 	<Signature>XYZ</Signature> 
+</Document> 
+ 
+2.2.8 Loan Cancellation  
+Employees has the ability at any particular time, before Employer Approval, to cancel their loan request and inform all involved parties i.e Employer and FSP. Below is the flow corresponding to this process: - 
+ 
+i. Employee login to government platforms 
+ii. Employee request cancellation (Precondition = Loan status is pending for approval)  
+iii. ESS cancel loan request within the system iv. 	ESS send cancel notification to FSP 
+      v. 	FSP acknowledges the receipt of the cancellation of loan      Employee Cancellation Notification To FSP 
+S/NItem Name Item description Type Optional 1 Application number Loan application identification Varchar (15) NO 2 Reason Reason for offer cancellation Varchar (150) NO 3 FSP Reference number Unique FSP Reference number corresponding to request Varchar (20) NO 4 Loan Number Unique FSP number 
+that identify loan application Varchar (20) Yes  
+Message 10
+<Document>
+  <Data> 
+ 	<Header> 
+ 	 	<Sender>ESS_UTUMISHI</Sender> 
+ 	 	<Receiver>FSPSystem</Receiver> 
+ 	 	 <FSPCode>1001</FSPCode> 
+ 	 	<MsgId>FSP1234</MsgId>  
+ 	<MessageType>LOAN_CANCELLATION_NOTIFICATION</MessageType> 
+ 	</Header> 
+ 	    <MessageDetails> 
+ 	 	<ApplicationNumber>1002</ApplicationNumber> 
+ 	 	<Reason>reason</Reason> 
+ 	 	<FSPReferenceNumber>TZ2001</FSPReferenceNumber> 
+ 	 	<LoanNumber>20070001</LoanNumber> 
+ 	    </MessageDetails> 
+    </Data>         
+ 	<Signature>XYZ</Signature> 
+</Document> 
+ 
+2.3 LOAN TOPUP 
+This part explains how employees will Top up existing loans, request loan Top up from FSP, FSP responses and the approval workflow from Employee to FSP to Employer and back to FSP for final approval and disbursement. 
+i. 	Employee login to government platforms ii. 	Employee select existing loan to top up iii. 	Employee inquire loan balance for FSP iv. 	FSP provides loan balance 
+v. 	Employee select product from the same FSP vi. 	Employee submit loan top up request to FSP vii. FSP receive and validate details  viii. FSP accept or reject loan top up request ix. 	Employee receive and decide on the offer 
+x. 	Employee submit loan application and deduction details to Employer  xi. 	Employer approves the loan application  
+xii. Employer initiates loan deduction (end current and add new deduction) xiii. FSP and employee receive notification of initiated deduction xiv. FSP disburse loan 
+xv. Employee receive amount credit notification 
+ 
+ 
+ 
+ 
+2.3.1 Pay Off Balance Request to FSP 
+S/N Item Name Item description Type Optional 1 Check number Employee identification Number (9) NO 2 Loan number Loan number Varchar (20) NO 3 First Name Employee first name Varchar (30) NO 4 Middle Name Employee middle name Varchar (30) NO 5 Last Name Employee last name Varchar (30) NO 6 Vote code Employer identification Varchar (6) NO 7 Vote name Employer name Varchar (255) NO 8 Deduction amount Deduction amount Number (38,2) NO 9 Deduction code Deduction Identification Varchar (8) NO 10 Deduction name Deduction description Varchar (255) NO 11 Deduction balance Deduction balance Number (38,2) NO 12 Payment option Full Payment option Varchar (50) NO  
+Message 11 
+<Document> 
+    <Data> 
+        <Header> 
+            <Sender>ESS_UTUMISHI</Sender> 
+            <Receiver>FSPSystem</Receiver> 
+ 	 <FSPCode>1001</FSPCode> 
+            <MsgId>FSP1234</MsgId> 
+         <MessageType>TOP_UP_PAY_0FF_BALANCE_REQUEST</MessageType> 
+        </Header> 
+                <MessageDetails> 
+                    <CheckNumber>111276112</CheckNumber> 
+                    <LoanNumber>11100000</LoanNumber> 
+                      <FirstName>Simba</FirstName> 
+                      <MiddleName>Mapunda</MiddleName> 
+                       <LastName>Nguchiro</LastName> 
+                    <VoteCode>32</VoteCode> 
+                    <VoteName>Watumishi</VoteName>                     <DeductionAmount>300000</DeductionAmount> 
+                    <DeductionCode>NY908</DeductionCode> 
+                    <DeductionName>Mawenzi Deduction</DeductionName> 
+                    <DeductionBalance>4000800000</DeductionBalance> 
+                    <PaymentOption>Full payment</PaymentOption> 
+                </MessageDetails> 
+    </Data> 
+    <Signature>XYZ</Signature> 
+</Document> 
+ 
+2.3.2 Settlement Balance Response From FSP 
+S/N Item Name Item description Type Optional 1 Loan number Unique number that identifies loan Varchar (20) NO 2 Total payoff amount Total amount to pay Number (38,2) NO 3 End date Loan end date Varchar (8) NO 4 Last deduction date Last payment date Date time NO 5 Payment reference number Payment reference number Varchar (8) NO 6 Final Payment date Last date for payment to be accepted Date time NO 7 Outstanding Balance Total Outstanding Balance Number (38,2) NO 8 Last Pay Date Last Pay Date Date time NO 9 FSP Reference Number Unique FSP number corresponding to request Varchar (8) NO  
+Message 12 
+<Document> 
+  <Data> 
+ 	<Header> 
+ 	 	<Sender>ZE DONE</Sender> 
+ 	 	<Receiver>ESS_UTUMISHI</Receiver> 
+ 	 	<FSPCode>FL8090</FSPCode> 
+ 	 	<MsgId>FSP12346</MsgId> 
+ 	<MessageType>LOAN_TOP_UP_BALANCE_RESPONSE</MessageType> 
+ 	</Header> 
+        <MessageDetails> 
+ <LoanNumber>A1200000002</LoanNumber>            
+	<FSPReferenceNumber>A2343453345</FSPReferenceNumber> 	              
+<PaymentReferenceNumber>A22211</PaymentReferenceNumber> 
+ 	 	<TotalPayoffAmount>77122876112.60</TotalPayoffAmount> 
+ 	 	<OutstandingBalance>-1150397</OutstandingBalance> 
+ 	 	<FinalPaymentDate>2022-04-23T10:20:15</FinalPaymentDate> 
+ 	 	<LastDeductionDate>2022-02-23T10:20:15</LastDeductionDate> 
+ 	 	<LastPayDate>2026-01-26T21:32:52</LastPayDate> 
+ 	 	<EndDate>2022-03-23T10:20:15</EndDate> 
+ 	</MessageDetails> 
+   </Data>   
+  <Signature>XYZ</Signature> 
+</Document> 
+2.3.3 Possible Loan Charges Request from Employee to FSP 
+This is on demand and sync API request to get possible loan charges from FSP 
+
+S/N Item Name 	Item description 	Type 	Optional 
+1 Check number Employee identification Number (9) NO 2 Designation code Designation Identification Varchar (8) NO 3 Designation name Designation description Varchar (255) NO 4 Basic Salary Basic salary Number (38,2) NO 5 Net salary Amount after deduction Number (38,2) NO 6 One third amount Minimum amount after deduction Number (38,2) NO 7 Deductible amount Net salary – 1/3 amount Number (38,2) NO 8 Retirement date Employee retirement year - birth date Number (3) NO 9 Terms of employment Permanent or Contractual Varchar (30) NO 10 Requested amount Loan amount Number (38,2) YES 11 Desired deductible amount Desired deduction amount Number (38,2) YES 12 Tenure Repayment period Number (3) YES 13 FSP code FSP identification Varchar (10) NO 14 Product code Product identification Varchar (8) NO 15 Vote Code Vote/institution identification code Varchar (10) NO 16 Total Employee Deduction Total existing employee deduction amount Number (38,2) NO 17 Job class code Identifier for a Group of Designations Varchar (10) NO Message 13 <Document> 
+ <Data> 
+ 	<Header> 
+ 	 	<Sender>ESS_UTUMISHI</Sender>  	 	<Receiver>FSPSystem</Receiver> 
+ 	 	<FSPCode>1001</FSPCode> 
+ 	 	<MsgId>90769af68ef011ecb3a6432feaa9296f</MsgId> 
+ 	 	<MessageType>LOAN_CHARGES_REQUEST</MessageType> 
+ 	</Header> 
+ 	 	<MessageDetails> 
+ 	 	 	<CheckNumber>111222333</CheckNumber> 
+ 	 	 	<DesignationCode>TZ800186</DesignationCode> 
+                                <DesignationName>ICTO II 
+                                 </DesignationName> 
+ 	 	 	<BasicSalary>5000.00</BasicSalary> 
+ 	 	 	<NetSalary>10000.00</NetSalary> 
+ 	 	 	<OneThirdAmount>12000.00</OneThirdAmount> 
+ 	 	 	<RequestedAmount>5000.00</RequestedAmount> 
+ 	 	 	<DeductibleAmount>12000.00</DeductibleAmount> 
+                                 <DesiredDeductibleAmount>12000.00 
+                                 </DesiredDeductibleAmount> 
+ 	 	 	<RetirementDate>3</RetirementDate> 
+ 	 	 	<TermsOfEmployment>Permanent and Pensionable 
+                                  </TermsOfEmployment> 
+ 	 	 	<Tenure>45</Tenure> 
+ 	 	 	<ProductCode>22346</ProductCode> 
+ 	 	 	<VoteCode>32</VoteCode> 
+ 	 	    <TotalEmployeeDeduction>120000.00</TotalEmployeeDeduction> 
+                                  <JobClassCode>JB0012</JobClassCode> 
+ 	 	</MessageDetails> 
+ 	</Data> 
+ 	<Signature>Signature</Signature> 
+</Document> 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+2.3.4 Possible Loan Charges Response From FSP 
+S/N Item Name Item description Type Optional 1 Desired deductible amount Desired deduction amount Number (38,2) YES 2 Total Insurance Total Loan Insurance charges Number (38,2) NO 3 Total Processing Fees Total Loan Processing Fees charges Number (38,2) YES 4 Total Interest Rate Amount Total Loan Interest Rate amount charges Number (38,2) NO 5 Other Charges Total Loan Other Charges Number (38,2) YES 6 Net Loan Amount Total Net Loan Amount employee can get Number (38,2) NO 7 Total Amount to Pay Total Amount employee can pay back Number (38,2) NO 8 Tenure Repayment period Number (3) NO 9 Eligible Amount Maximum loan employee can get Number (38,2) YES 10 Monthly Return Amount Amount employee can return in each month Number (38,2) NO Message 14 <Document> 
+ <Data> 
+ 	<Header> 
+ 	 	<Sender>ESS_UTUMISHI</Sender> 
+ 	 	<Receiver>FSPName</Receiver> 
+ 	 	<FSPCode>FL8090</FSPCode> 
+ 	 	<MsgId>90769af68ef011ecb3a6432feaa9296f</MsgId> 
+ 	 	<MessageType>LOAN_CHARGES_RESPONSE</MessageType> 
+ 	</Header> 
+ 	 	<MessageDetails> 
+ 	 	       <DesiredDeductibleAmount>5000.00</DesiredDeductibleAmount> 
+ 	 	 	<TotalInsurance>5000.00</TotalInsurance> 
+ 	 	 	<TotalProcessingFees>100.00</TotalProcessingFees> 
+ 	 	 	<TotalInterestRateAmount>5000.00</TotalInterestRateAmount> 
+ 	 	 	<OtherCharges>12000.00</OtherCharges> 
+ 	 	 	<NetLoanAmount>12000.00</NetLoanAmount> 
+ 	 	 	<TotalAmountToPay>12000.00</TotalAmountToPay> 
+ 	 	 	<Tenure>36</Tenure> 
+ 	 	 	<EligibleAmount>6731040.52</EligibleAmount> 
+ 	 	 	<MonthlyReturnAmount>10000.52</MonthlyReturnAmount> 
+ 	 	</MessageDetails> 
+ 	</Data> 
+ 	<Signature>Signature</Signature> 
+</Document> 
+ 
+2.3.5 Loan Top Up Request from Employee to FSP 
+S/N Item Name Item description Type Optional 1 Check number Employee identification Number (9) NO 2 First Name Employee First Name Varchar (30) NO 3 Middle Name Employee Middle Name Varchar (30) NO 4 Last Name Employee Last Name Varchar (30) NO 5 Sex Employee sex Varchar (1) NO 6 Employment Date Employee employment date Varchar (10) NO 7 Marital Status Employee marital status Varchar (10) NO 8 Confirmation Date Employee confirmation date Varchar (10) YES 9 Bank Account Number Employee bank account number Varchar (20) NO 10 Nearest Branch 
+Name Employee nearest bank branch Varchar (50) YES 11 Nearest Branch Code Employee nearest bank code Varchar (50) YES 12 Vote code Employer identification Varchar (6) NO 13 Vote name Employer name Varchar (255) NO 14 NIN National identification number Varchar (22) NO 15 Designation code Designation Identification Varchar (8) NO 16 Designation name Designation description Varchar (255) NO 17 Basic Salary Basic salary Number (38,2) NO 18 Net salary Amount after deduction Number (38,2) NO 19 One third amount Minimum amount after deduction Number (38,2) NO 20  Total 
+Employee 
+Deduction Total existing employee deduction amount Number (38,2) NO 
+21 Retirement date Employee retirement year - birth date Number (3) NO 22 Terms of employment Permanent or Contractual Varchar (30) NO 23 Requested amount Loan amount Number (38,2) YES 24 Desired deductible amount Desired deduction amount Number (38,2) YES 25 Tenure Repayment period Number (3) NO 26 FSP code FSP identification Varchar (10) NO 27 Product code Product identification Varchar (8) NO 28 Interest rate Interest rate amount Number (3,2) NO 29 Processing fee Cost of loan processing percentage Number (3,2) NO 30 Insurance Loan cover percentage amount Number (3,2) NO 31 Physical address Physical address Varchar (50) NO 32 Telephone number Telephone number Varchar (12) YES 33 Email address Email address Varchar (50) NO 34 Mobile number Mobile number Varchar (12) NO 35 Application number Loan application identification Varchar (15) NO 36 Loan Purpose Reason for loan request Varchar (250) NO 37 Contract Start Date Employee contract start date (Optional) Varchar (10) YES 38 Contract End Date Employee contract end date (Optional) Varchar (10) YES 39 Loan Number FSP unique identifier for existing loan Varchar (20) NO 40 Settlement amount Loan settlement amount Number (38,2) NO 41 Swift Code Bank swift code Varchar (50) No 42 Funding Employee source of salary payment Varchar (50) No Message 16
+<Document> 
+ <Data> 
+ 	<Header> 
+ 	 	<Sender>ESS_UTUMISHI</Sender> 
+ 	 	<Receiver>FSPSystem</Receiver> 
+ 	 	<FSPCode>1001</FSPCode> 
+ 	 	<MsgId>90769af68ef011ecb3a6432feaa9296f</MsgId> 
+ 	 	<MessageType>TOP_UP_OFFER_REQUEST</MessageType> 
+ 	</Header> 
+ 	 	<MessageDetails> 
+ 	 	 	<CheckNumber>111222333</CheckNumber> 
+ 	 	 	<FirstName>Juma</FirstName> 
+ 	 	 	<MiddleName>Ponda</MiddleName> 
+ 	 	 	<LastName>Mali</LastName> 
+ 	 	 	<Sex>M</Sex> 	 	 	 	 	  	  	 
+ 	 	<BankAccountNumber>011445888578</BankAccountNumber> 
+            	           <EmploymentDate>2020-07-01</EmploymentDate> 
+            	 	<MaritalStatus>Married</MaritalStatus> 
+             	 	<ConfirmationDate>2021-07-01</ConfirmationDate> 
+      	 	 	 <TotalEmployeeDeduction>205500</TotalEmployeeDeduction> 
+ 	 	 	<NearestBranchName>AX Manyoni</NearestBranchName> 
+                                 <NearestBranchCode>AX Manyoni</NearestBranchCode> 
+ 	 	 	<VoteCode>32</VoteCode> 
+ 	 	 	<VoteName>XYZ</VoteName> 
+ 	 	 	<NIN>19870527111450000124</NIN> 
+ 	 	 	<DesignationCode>TZ800186</DesignationCode> 
+ 	 	 	<DesignationName>ICTOII</DesignationName> 
+ 	 	 	<BasicSalary>5000.00</BasicSalary> 
+ 	 	 	<NetSalary>100.00</NetSalary> 
+ 	 	 	<OneThirdAmount>120000.00</OneThirdAmount> 
+ 	 	 	<RequestedAmount>5000.00</RequestedAmount> 
+ 	 	             <DesiredDeductibleAmount>12000.00 
+                                  </DesiredDeductibleAmount> 
+ 	 	 	<RetirementDate>3</RetirementDate> 
+ 	 	 	<TermsOfEmployment>Permanent and Pensionable 
+                                  </TermsOfEmployment> 
+ 	 	 	<Tenure>45</Tenure> 
+ 	 	 	<ProductCode>22346</ProductCode> 
+ 	 	 	<InterestRate>20.00</InterestRate> 
+ 	 	 	<ProcessingFee>200.00</ProcessingFee> 
+ 	 	 	<Insurance>500.00</Insurance> 
+ 	 	 	<PhysicalAddress>Arusha</PhysicalAddress> 
+ 	 	 	<EmailAddress>abc.abc@instution.com</EmailAddress> 
+ 	 	 	<MobileNumber>0758484339</MobileNumber> 
+ 	 	 	<ApplicationNumber>0021000</ApplicationNumber> 
+ 	 	 	<LoanPurpose> Mkopo wakujenga nyumba </LoanPurpose> 
+ 	 	 	<ContractStartDate>2011-02-25</ContractStartDate> 
+ 	 	 	<ContractEndDate>2025-02-25 </ContractEndDate> 
+ 	 	 	<LoanNumber>AA0021000</LoanNumber> 
+                                 <SettlementAmount>800000.58</SettlementAmount>  
+ 	 	          <SwiftCode>AXB02</SwiftCode> 
+ 	 	          <Funding>OS</Funding> 
+ 	 	</MessageDetails> 
+ 	</Data> 
+ 	<Signature>Signature</Signature> 
+</Document> 
+2.3.6 Loan Offer Approval Notification from FSP to ESS         
+This is an API to notify ESS on submitted loan offer approval (Accepted or Rejected). 
+S/ N Item Name Item description Type Optional 1 Application number Loan application identification Varchar (15) NO 2 Reason Reason for offer rejection Varchar (150) YES 3 FSP 
+Reference number Unique FSP Reference number corresponding to request Varchar (20) YES 4 Other charges Other charges Number (38,2) YES 5 Approval APPROVED || REJECTED Varchar (10) NO 6 Loan Number Unique FSP number 
+that identify loan application Varchar (20) YES  
+ 
+Message 17
+<Document> 
+ 	<Data> 
+ 	 	<Header> 
+ 	 	 	<Sender>ZE DONE</Sender> 
+ 	 	 	<Receiver>ESS_UTUMISHI</Receiver> 
+ 	 	 	<FSPCode>1001</FSPCode> 
+ 	 	 	<MsgId>FSP1234</MsgId> 
+<MessageType>LOAN_INITIAL_APPROVAL_NOTIFICATION</MessageType> 
+ 	 	</Header> 
+ 	 	<MessageDetails> 
+ 	 	<ApplicationNumber>ESS1678796729374</ApplicationNumber> 
+ 	 	 	<Reason>Ok</Reason> 
+ 	 	 	<FSPReferenceNumber>TZ0010</FSPReferenceNumber> 
+ 	 	 	<LoanNumber>20070001</LoanNumber> 
+ 	 	 	<TotalAmountToPay>2500000</TotalAmountToPay> 
+ 	 	 	<OtherCharges>2500</OtherCharges> 
+ 	 	 	<Approval>APPROVED</Approval> 
+ 	 	</MessageDetails> 
+ 	</Data> 
+ 	<Signature>XYZ</Signature> 
+</Document> 
+2.3.7 Top Up Verification and Approval  
+Loan Approval Status Notification to FSP 
+S/ N Item Name Item description Type Optional 1 Application number Loan application identification Varchar (15) NO 2 Reason Reason for offer rejection Varchar (150) YES 3 FSP 
+Reference number Unique FSP Reference number corresponding to request Varchar (8) NO 4 Approval APPROVED || REJECTED Varchar (10) NO 5 Loan Number Unique FSP number that identify loan application Varchar (20) YES  
+ 
+ 
+ 
+ 
+ 
+Message 18
+<Document> 
+   <Data> 
+<Header> 
+   <Sender>ESS_UTUMISHI</Sender> 
+   <Receiver>FSPSystem</Receiver> 
+  <FSPCode>FL8090</FSPCode> 
+    <MsgId>FSP1234</MsgId>  
+<MessageType>LOAN_FINAL_APPROVAL_NOTIFICATION</MessageType>  </Header> 
+ <MessageDetails> 
+         <ApplicationNumber>ESS101</ApplicationNumber> 
+         <Reason>Not allowed</Reason> 
+          <FSPReferenceNumber>TZ001</FSPReferenceNumber> 
+          <LoanNumber>20070001</LoanNumber> 
+           <Approval>APPROVED || REJECTED</Approval> 
+           </MessageDetails></Data>         
+<Signature>XYZ</Signature> 
+</Document> 
+2.3.8 Disbursement Notification from FSP to ESS 
+This includes Loan Application or Loan Takeover disbursement notification 
+S/ N Item Name Item description Type Optional 1 Application number Loan application identification Varchar (15) NO 2 FSP 
+Reference number Unique FSP Reference number corresponding to request Varchar (8) NO 3 Loan Number Unique FSP number that identify loan application Varchar (20) NO 4 Total Amount to pay Total Amount to pay Number 
+(38,2) YES 5 Disbursement date Disbursement date String NO  
+ 
+ 
+ 
+ 
+ 
+ 
+
+Message 19
+<Document>
+  <Data> 
+ <Header> 
+ 	 	<Sender>ZE DONE</Sender> 
+ 	 	<Receiver>ESS_UTUMISHI</Receiver> 
+ 	 	 <FSPCode>1001</FSPCode> 
+ 	 	<MsgId>FSP1234</MsgId> 
+ 	<MessageType>LOAN_DISBURSEMENT_NOTIFICATION</MessageType> 
+ 	</Header> 
+            <MessageDetails> 
+                <ApplicationNumber>1002</ApplicationNumber> 
+                <Reason>I have desired not to apply</Reason> 
+                <FSPReferenceNumber>TZ001</FSPReferenceNumber> 
+                <LoanNumber>20070001</LoanNumber> 
+                <TotalAmountToPay>2500000</TotalAmountToPay> 
+                <DisbursementDate>2022-05-26T21:32:52</DisbursementDate> 
+            </MessageDetails> 
+    </Data>   
+ 	<Signature>XYZ</Signature> 
+</Document> 
+ 
+2.3.9 Disbursement Failure Notification from FSP to ESS 
+ 
+S/N Item Name Item description Type Optional 1 Application number Loan application identification Varchar (15) NO 2 Reason Description why disburseme
+nt failure Varchar (255) NO  
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+Message 20
+<Document>
+ 	<Data> 
+ 	 	<Header> 
+ 	 	 	<Sender>ZE DONE</Sender> 
+ 	 	 	<Receiver>ESS_UTUMISHI</Receiver> 
+ 	 	 	<FSPCode>1001</FSPCode> 
+ 	 	 	<MsgId>FSP12346</MsgId> 
+ 	 	 	 <MessageType> 
+ 	 	 	 	LOAN_DISBURSEMENT_FAILURE_NOTIFICATION 
+ 	 	 	</MessageType> 
+ 	 	</Header> 
+ 	 	<MessageDetails> 
+ 	 	 	<ApplicationNumber>ESS1002000</ApplicationNumber> 
+ 	 	 	<Reason>Technical issues</Reason> 
+ 	 	</MessageDetails> 
+ 	</Data> 
+ 	<Signature>XYZ</Signature> 
+</Document> 
+ 
+2.3.10 Top up Cancellation  
+Employees have the ability at any particular time, before Employer Approval, to cancel their loan request and inform all involved parties i.e Employer and FSP. Below is the flow corresponding to this process: - 
+ 
+i. Employee login to government platforms 
+ii. Employee request cancellation (Precondition = Loan status is pending for approval)  
+iii. ESS cancel loan request within the system iv. 	ESS send cancel notification to FSP 
+	v. 	FSP acknowledges the receipt of the cancellation of loan  
+ 
+2.3.11 Employee Cancellation Notification to FSP 
+ 
+S/ N Item Name Item description Type Optional 1 Application number Loan application identification Varchar (15) NO 2 Reason Reason for offer cancellation Varchar (150) NO 3 FSP 
+Reference number Unique FSP Reference number corresponding to request Varchar (8) NO 4 Loan Number Unique FSP number that identify loan application Varchar (20) Yes Message 21
+<Document>
+  <Data> 
+ 	<Header> 
+ 	 	<Sender>ESS_UTUMISHI</Sender> 
+ 	 	<Receiver>FSPSystem</Receiver> 
+ 	 	 <FSPCode>1001</FSPCode> 
+ 	 	<MsgId>FSP1234</MsgId> 
+ 	<MessageType>LOAN_CANCELLATION_NOTIFICATION</MessageType> 
+ 	</Header> 
+ 	    <MessageDetails> 
+ 	 	<ApplicationNumber>1002</ApplicationNumber> 
+ 	 	<Reason>reason</Reason> 
+ 	 	<FSPReferenceNumber>TZ2001</FSPReferenceNumber> 
+ 	 	<LoanNumber>20070001</LoanNumber> 
+ 	    </MessageDetails> 
+    </Data>         
+ 	<Signature>XYZ</Signature> 
+</Document> 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+  2.4 LOAN RESTRUCTURING 
+ The end point for updating loan parameters ie loan amount, tenure or installment 
+ 
+2.4.1 Loan restructuring initiated by employee 
+i. Employee login to ESS portal 
+ii. Employee select existing loan for restructuring iii. Employee request loan balance from FSP iv. FSP respond for loan balance request 
+v. Employee request loan calculator/ affordability (reduce or increase installment or 
+   Tenure) vi. FSP respond and validate loan requested calculator/ affordability vii. Employee save and submit loan restructuring request to FSP  viii. FSP accept or reject (provide reason) loan restructuring request ix. Employee receive notification on FSP loan restructuring approval  
+x. Employee accept (send loan restructuring to employer) or reject (provide reason) loan restructuring request  
+xi. Employer accept or reject loan restructuring request  
+xii. If Employer accept loan restructuring request and stop old deduction and create new deduction, FSP and Employee receive notification  
+xiii. If Employer reject loan restructuring request, FSP and Employee receive rejection notification with comment 
+ 
+2.4.2 Loan restructuring initiated by FSP 
+ 
+i. FSP send loan restructuring proposal to ESS system 
+ii. ESS system receive and validate affordability of the loan restructuring proposal from 
+FSP 
+iii. Employee receive notification  iv. Employee login to ESS portal 
+v. Employee view loan restructuring proposal from FSP 
+vi. Employee accept or reject (with reason) loan restructuring proposal from FSP vii. Employee save and submit loan restructuring request to FSP  viii. FSP accept or reject (with reason) loan restructuring request ix. Employee receive notification on FSP loan restructuring approval  
+x. Employee accept (send loan restructuring to employer) or reject (provide reason) loan restructuring request  
+xi. Employer accept or reject loan restructuring request  
+xii. If Employer accept loan restructuring request and stop old deduction and create new deduction, FSP and Employee receive notification  
+xiii. If Employer reject loan restructuring request, FSP and Employee receive rejection notification with comment 
+ 
+2.4.3 Employee Request Loan Balance from FSP 
+S/N Item Name Item description Type Optional 1 Check number Employee identification Number (9) NO 2 Loan number Loan number Varchar (20) NO 3 First Name Employee first name Varchar (30) NO 4 Middle Name Employee middle name Varchar (30) NO 5 Last Name Employee last name Varchar (30) NO 6 Vote code Employer identification Varchar (6) NO 7 Vote name Employer name Varchar (255) NO 8 Deduction amount Deduction amount Number (38,2) NO 9 Deduction code Deduction Identification Varchar (8) NO 10 Deduction name Deduction description Varchar (255) NO 11 Deduction balance Deduction balance Number (38,2) NO 12 Payment option Full Payment option Varchar (50) NO Message 22 
+<Document> 
+    <Data> 
+        <Header> 
+            <Sender>ESS_UTUMISHI</Sender> 
+            <Receiver>FSPSystem</Receiver> 
+ 	 <FSPCode>1001</FSPCode> 
+            <MsgId>FSP1234</MsgId> 
+         <MessageType>LOAN_RESTRUCTURE_BALANCE_REQUEST</MessageType> 
+        </Header> 
+                <MessageDetails> 
+                    <CheckNumber>111276112</CheckNumber> 
+                    <LoanNumber>11100000</LoanNumber> 
+                      <FirstName>Simba</FirstName> 
+                      <MiddleName>Mapunda</MiddleName> 
+                       <LastName>Nguchiro</LastName> 
+                    <VoteCode>32</VoteCode> 
+                    <VoteName>Watumishi</VoteName> 
+                    <DeductionAmount>300000</DeductionAmount> 
+                    <DeductionCode>NY908</DeductionCode> 
+                    <DeductionName>Mawenzi Deduction</DeductionName> 
+                    <DeductionBalance>4000800000</DeductionBalance> 
+                    <PaymentOption>Full payment</PaymentOption> 
+                </MessageDetails> 
+    </Data> 
+    <Signature>XYZ</Signature> 
+</Document> 
+ 
+2.4.4 Loan Restructuring Balance Response From FSP 
+ 
+S/N Item Name Item description Type Optional 1 Outstanding Balance Principal and Interest Amount Number 
+(38,2) NO 2 Principal Balance Principal Balance amount Number 
+(38,2) NO 3 Loan Number Employee Loan reference number that identifies loan application Varchar 
+(20) NO 4 Installment 
+Amount Loan installment amount (EMI) Number 
+(38,2) NO 5 Last repayment Date Last Monthly Repayment Date Date Time NO 6 Maturity Date Last Installment Date Date Time NO 7 Validity Date Validity date for completion of the request Date Time NO  
+Message 23 
+<Document> 
+ 	<Data> 
+ 	 	<Header> 
+ 	 	 	<Sender>ZE DONE</Sender> 
+ 	 	 	<Receiver>ESS_UTUMISHI</Receiver> 
+ 	 	 	<FSPCode>1001</FSPCode> 
+ 	 	 	<MsgId>FSP12346</MsgId> 
+<MessageType>LOAN_RESTRUCTURE_BALANCE_RESPONSE 
+</MessageType> 
+ 	  </Header> 
+ 	   <MessageDetails> 
+                      <LoanNumber>A00122</LoanNumber>  
+ 	 	<InstallmentAmount>33112.00</InstallmentAmount> 
+<OutstandingBalance>101100.00</OutstandingBalance> 
+<PrincipalBalance>101100.00</PrincipalBalance> 
+ 	 	<ValidityDate>2022-05-26T21:32:52</ValidityDate> 
+<LastRepaymentDate>2022-05-26T21:32:52</LastRepaymentDate> 
+ 	 	<MaturityDate>2022-05-26T21:32:52</MaturityDate> 
+ 	</MessageDetails> 
+ 	</Data> 
+ 	<Signature>XYZ</Signature> 
+</Document> 
+ 
+2.4.5 FSP Initiate Loan Restructuring Request 
+FSP initiate loan restructuring request from FSP system to ESS system. ESS system will respond using General Response Message on success or failure. 
+S/N Item Name Item description Type Optional 1 Loan Number Employee Loan reference number that identify loan application in FSP System Varchar 
+(20) NO 2 Application 
+Number Loan unique reference number that identify loan application in ESS Varchar 
+(20) NO 3 Outstanding Balance Current Loan Principal and Interest 
+Amount Number 
+(38,2) NO 4 Principal Balance Principal Balance amount Number 
+(38,2) NO 5 Installment Amount  Loan installment amount (Monthly amount) Number 
+(38,2) NO 6 Last repayment Date Repayment Date Date Time NO 7 Maturity Date Last Installment Date Date Time NO 8 Validity Date Validity date for completion of the request Date Time NO 9 Reason for restructuring Reason for restructuring Varchar (255) NO 10 New Installment Amount New installment amount Number 
+(38,2) NO 12 New Insurance New Loan Insurance charges Number 
+(38,2) NO 13 New Processing Fees New Loan Processing Fees charges Number 
+(38,2) NO 14 New Interest Amount New Loan Interest amount charges Number 
+(38,2) NO 15 Other Charges Total Loan Other Charges Number 
+(38,2) NO 16 New Principal Amount New Principal Amount for loan restructuring Number 
+(38,2) NO 17 New Total 
+Amount Payable New Loan Amount (principal plus interest) Number 
+(38,2) NO 18 New Tenure New Repayment period Number 
+(3) NO 19 Product Code FSP product code Varchar 
+(20) NO 20 Deduction Code Loan deduction code Varchar 
+(20) NO 21 FSP Reference Number  Unique loan restructure proposal reference number  Varchar 
+(20) NO Message 24 
+<Document> 
+ 	<Data> 
+ 	 	<Header> 
+ 	 	 	<Sender>ZE DONE</Sender>  	 	 	<Receiver>ESS_UTUMISHI</Receiver> 
+ 	 	 	<FSPCode>1001</FSPCode> 
+ 	 	 	<MsgId>FSP12346</MsgId>
+ 	<MessageType>LOAN_RESTRUCTURE_REQUEST_FSP</MessageType> 
+ 	  </Header> 
+ 	   <MessageDetails> 
+                       <ApplicationNumber>ES00122</ApplicationNumber> 
+                      <LoanNumber>A00122</LoanNumber>  
+ 	 	<InstallmentAmount>33112.00</InstallmentAmount> 
+<OutstandingBalance>101100.00</OutstandingBalance> 
+<PrincipalBalance>101100.00</PrincipalBalance> 
+ 	 	<ValidityDate>2022-05-26T21:32:52</ValidityDate> 
+<LastRepaymentDate>2022-05-26T21:32:52</LastRepaymentDate> 
+ 	 	<MaturityDate>2022-05-26T21:32:52</MaturityDate> 
+                     <Reason>Newsalary</Reason> 
+                     <NewInstallmentAmount>33112.00</NewInstallmentAmount> 
+ 	 	<NewInsuranceAmount>5000.00</NewInsuranceAmount> 
+                      <NewProcessingFee>700.00</NewProcessingFee> 
+                       <NewInterestAmount>590000.00</NewInterestAmount> 
+                        <NewPrincipalAmount>4500.00</NewPrincipalAmount> 
+                      <NewTotalAmountPayable>30000.00</NewTotalAmountPayable> 
+                       <OtherCharges>0.00</OtherCharges> 
+                       <NewTenure>46</NewTenure> 
+                        <ProductCode>PD6778</ProductCode> 
+                        <DeductionCode>PD6778</DeductionCode> 
+                       <FSPReferenceNumber>RF50000</FSPReferenceNumber > 
+ 	</MessageDetails> 
+ 	</Data> 
+ 	<Signature>XYZ</Signature> 
+</Document> 
+2.4.6 Loan Restructuring Affordability Request 
+This is on demand and sync API request to get possible loan affordability from FSP 
+S/N Item Name Item description Type Optional 1 Check number Employee identification Number (9) NO 2 Designation code Designation Identification Varchar (8) NO 3 Designation name Designation description Varchar (255) NO 4 Basic Salary Basic salary Number (38,2) NO 5 Net salary Amount after deduction Number (38,2) NO 6 One third amount Minimum amount after deduction Number (38,2) NO 5 Deductible amount Net salary – 1/3 amount Number (38,2) NO 6 Retirement date Employee retirement year - birth date Number (3) NO 7 Terms of employment Permanent or Contractual Varchar (30) NO 8 Requested amount Loan amount Number (38,2) YES 9 Desired deductible amount Desired deduction amount Number (38,2) YES 10 Tenure Repayment period Number (3) YES 11 FSP code FSP identification Varchar (10) NO   12 Product code Product identification Varchar (8) NO 13 Vote Code Vote/institution identification code Varchar (10) NO 14 Total Employee Deduction Total existing employee deduction amount Number (38,2) NO 15 Job class code Identifier for a Group of Designations Varchar (10) NO 16 Loan Number unique FSP                         number that identify loan application Varchar (20) NO  
+Message 25 <Document> 
+ <Data> 
+ 	<Header> 
+ 	 	<Sender>ESS_UTUMISHI</Sender> 
+ 	 	<Receiver>FSPSystem</Receiver> 
+ 	 	<FSPCode>1001</FSPCode> 
+ 	 	<MsgId>90769af68ef011ecb3a6432feaa9296f</MsgId> 
+ 	 	<MessageType>LOAN_RESTRUCTURE_AFFORDABILITY_REQUEST      
+</MessageType> 
+ 	</Header> 
+ 	 	<MessageDetails> 
+ 	 	 	<CheckNumber>111222333</CheckNumber> 
+ 	 	 	<DesignationCode>TZ800186</DesignationCode> 
+                                <DesignationName>ICTO II </DesignationName> 
+ 	 	 	<BasicSalary>5000.00</BasicSalary> 
+ 	 	 	<NetSalary>10000.00</NetSalary>  	 	 	<OneThirdAmount>12000.00</OneThirdAmount> 
+ 	 	 	<RequestedAmount>5000.00</RequestedAmount> 
+ 	 	 	<DeductibleAmount>12000.00</DeductibleAmount> 
+                                 <DesiredDeductibleAmount>12000.00 
+                                 </DesiredDeductibleAmount> 
+ 	 	 	<RetirementDate>3</RetirementDate> 
+ 	 	 	<TermsOfEmployment>Permanent and Pensionable 
+                                  </TermsOfEmployment> 
+ 	 	 	<Tenure>45</Tenure> 
+ 	 	 	<ProductCode>22346</ProductCode> 
+ 	 	 	<VoteCode>32</VoteCode> 
+ 	 	           <TotalEmployeeDeduction>120000.00</TotalEmployeeDeduction> 
+                                  <JobClassCode>JB0012</JobClassCode> 
+<LoanNumber>A127626</LoanNumber> 
+ 	 	</MessageDetails> 
+ 	</Data> 
+ 	<Signature>Signature</Signature> 
+</Document> 
+2.4.7 Possible Loan Restructuring Charges Response from FSP to Employee 
+ 
+S/N Item Name Item description Type Optional 1 Desired deductible amount Desired deduction amount Number (38,2) YES 2 Total Insurance Total Loan Insurance charges Number (38,2) NO 3 Total 
+Processing Fees Total Loan Processing Fees charges Number (38,2) YES 4 Total Interest Rate Amount Total Loan Interest amount charges Number (38,2) NO 5 Other Charges Total Loan Other Charges Number (38,2) YES 6 Net Loan Amount Total Net Loan Amount employee can get Number (38,2) NO 7 Total Amount to Pay Total Amount employee can pay back Number (38,2) NO 8 Tenure Repayment period Number (3) NO 9 Monthly Return Amount Amount employee can return in each month Number (38,2) NO  
+ 
+Message 26 
+<Document> 
+ <Data> 
+ 	<Header> 
+ 	 	<Sender>FSPName</Sender> 
+ 	 	<Receiver>ESS_UTUMISHI</Receiver> 
+ 	 	<FSPCode>FL8090</FSPCode> 
+ 	 	<MsgId>90769af68ef011ecb3a6432feaa9296f</MsgId> 
+<MessageType> LOAN_RESTRUCTURE_AFFORDABILITY_RESPONSE 
+</MessageType> 
+ 	</Header> 
+ 	 	<MessageDetails> 
+ 	 	       <DesiredDeductibleAmount>5000.00</DesiredDeductibleAmount> 
+ 	 	 	<TotalInsurance>5000.00</TotalInsurance> 
+ 	 	 	<TotalProcessingFees>100.00</TotalProcessingFees> 
+ 	 	 	<TotalInterestRateAmount>00.00</TotalInterestRateAmount> 
+ 	 	 	<OtherCharges>00.00</OtherCharges> 
+ 	 	 	<NetLoanAmount>12000.00</NetLoanAmount> 
+ 	 	 	<TotalAmountToPay>12000.00</TotalAmountToPay> 
+ 	 	 	<Tenure>36</Tenure> 
+ 	 	 	<EligibleAmount>6731040.52</EligibleAmount> 
+ 	 	 	<MonthlyReturnAmount>10000.52</MonthlyReturnAmount> 
+ 	 	</MessageDetails> 
+ 	</Data> 
+ 	<Signature>Signature</Signature> 
+</Document> 
+ 
+2.4.8 Loan Restructuring Request from Employee to FSP 
+S/N Item Name Item description Type Optional 1 Check number Employee identification Number (9) NO 2 First Name Employee First Name Varchar (30) NO 3 Middle Name Employee Middle Name Varchar (30) NO 4 Last Name Employee Last Name Varchar (30) NO 5 Sex Employee sex Varchar (1) NO 6 Employment Date Employee employment date Varchar (10) NO 7 Marital Status Employee marital status Varchar (10) NO 8 Nearest Branch 
+Name Employee nearest bank branch Varchar (50) YES 9 Nearest Branch Code Employee nearest bank code Varchar (50) YES 10 Vote code Employer identification Varchar (6) NO 11 Vote name Employer name Varchar (255) NO 
+12 NIN National identification number Varchar (22) NO 13 Designation code Designation Identification Varchar (8) NO 14 Designation name Designation description Varchar (255) NO 15 Basic Salary Basic salary Number (38,2) NO 16 Net salary Amount after deduction Number (38,2) NO 17 One third amount Minimum amount after deduction Number (38,2) NO 18  Total 
+Employee 
+Deduction Total existing employee deduction amount Number (38,2) NO 19 Retirement date Employee retirement year - birth date Number (3) NO 20 Terms of employment Permanent or Contractual Varchar (30) NO 21 Desired deductible amount Desired deduction amount Number (38,2) YES 22 Tenure Repayment period Number (3) NO 23 FSP code FSP identification Varchar (10) NO 24 Product code Product identification Varchar (8) NO 25 Interest rate Interest rate amount Number (3,2) NO 26 Processing fee Cost of loan processing percentage Number (3,2) NO 27 Insurance Loan cover percentage amount Number (3,2) NO 28 Physical address Physical address Varchar (50) NO 29 Email address Email address Varchar (50) NO 30 Mobile number Mobile number Varchar (12) NO 31 Application number Loan application identification Varchar (15) NO 32 Contract Start Date Employee contract start date (Optional) Varchar (10) YES 33 Contract End Date Employee contract end date (Optional) Varchar (10) YES 34 Loan Number FSP unique identifier for existing loan Varchar (20) NO 35 Funding Employee source of salary payment Varchar (50) NO 36 FSP Reference Number  Unique loan restructure proposal reference number  Varchar (20) YES 37 Loan Purpose Reason for loan restructuring Varchar (150) NO  
+Message 27 <Document> 
+ <Data> 
+ 	<Header> 
+ 	 	<Sender>ESS_UTUMISHI</Sender> 
+ 	 	<Receiver>FSPSystem</Receiver> 
+ 	 	<FSPCode>1001</FSPCode> 
+ 	 	<MsgId>90769af68ef011ecb3a6432feaa9296f</MsgId> 
+ 	<MessageType>LOAN_RESTRUCTURE_REQUEST</MessageType> 
+ 	</Header> 
+ 	 	<MessageDetails> 
+ 	 	 	<CheckNumber>111222333</CheckNumber> 
+ 	 	 	<FirstName>Juma</FirstName> 
+ 	 	 	<MiddleName>Ponda</MiddleName> 
+ 	 	 	<LastName>Mali</LastName> 
+ 	 	 	<Sex>M</Sex> 	 	 	 	 	  	  
+            	           <EmploymentDate>2020-07-01</EmploymentDate> 
+            	 	<MaritalStatus>Married</MaritalStatus> 
+             	 	<ConfirmationDate>2021-07-01</ConfirmationDate> 
+      	 	 	 <TotalEmployeeDeduction>205500</TotalEmployeeDeduction> 
+ 	 	 	<NearestBranchName>AX Manyoni</NearestBranchName> 
+                                 <NearestBranchCode>AX Manyoni</NearestBranchCode> 
+ 	 	 	<VoteCode>32</VoteCode> 
+ 	 	 	<VoteName>XYZ</VoteName> 
+ 	 	 	<NIN>19870527111450000124</NIN> 
+ 	 	 	<DesignationCode>TZ800186</DesignationCode> 
+ 	 	 	<DesignationName>ICTOII</DesignationName> 
+ 	 	 	<BasicSalary>5000.00</BasicSalary> 
+ 	 	 	<NetSalary>100.00</NetSalary> 
+ 	 	 	<OneThirdAmount>120000.00</OneThirdAmount> 
+ 	 	            <DesiredDeductibleAmount>12000.00</DesiredDeductibleAmount>  	 	 	<RetirementDate>3</RetirementDate> 
+ 	 	 	<TermsOfEmployment>Permanent and Pensionable 
+                                  </TermsOfEmployment> 
+ 	 	 	<Tenure>45</Tenure> 
+ 	 	 	<ProductCode>22346</ProductCode> 
+ 	 	 	<InterestRate>20.00</InterestRate> 
+ 	 	 	<ProcessingFee>200.00</ProcessingFee> 
+ 	 	 	<Insurance>500.00</Insurance> 
+ 	 	 	<PhysicalAddress>Arusha</PhysicalAddress> 
+ 	 	 	<EmailAddress>abc.abc@instution.com</EmailAddress> 
+ 	 	 	<MobileNumber>0758484339</MobileNumber> 
+ 	 	 	<ApplicationNumber>0021000</ApplicationNumber> 
+ 	 	 	<ContractStartDate>2011-02-25</ContractStartDate> 
+ 	 	 	<ContractEndDate>2025-02-25 </ContractEndDate> 
+ 	 	 	<LoanNumber>AA0021000</LoanNumber> 
+ 	 	          <Funding>OS</Funding> 
+                               <FSPReferenceNumber>AA0021000</FSPReferenceNumber> 
+                              <LoanPurpose>Mkopo wakujenga nyumba</LoanPurpose> 
+ 	 	</MessageDetails> 
+ 	</Data> 
+ 	<Signature>Signature</Signature> 
+</Document> 
+ 
+2.4.9 Restructuring Request Approval Notification from FSP to ESS         
+This is an API to notify ESS on submitted restructuring request approval (Accepted or Rejected). 
+S/ N Item Name Item description Type Optional 1 Application number Loan application identification Varchar (18) NO 2 Reason Reason for offer rejection Varchar (150) YES 3 FSP 
+Reference number Unique FSP Reference number corresponding to request Varchar (20) YES 4 Other charges Other charges Number 
+(38,2) YES 5 Approval APPROVED|| REJECTED Varchar (10) NO 6 Loan Number Unique FSP number 
+that identify loan application Varchar (20) YES Message 28 
+<Document> 
+ 	<Data> 
+ 	 	<Header> 
+ 	 	 	<Sender>ZE DONE</Sender> 
+ 	 	 	<Receiver>ESS_UTUMISHI</Receiver> 
+ 	 	 	<FSPCode>1001</FSPCode> 
+ 	 	 	<MsgId>FSP1234</MsgId> 
+<MessageType>LOAN_INITIAL_APPROVAL_NOTIFICATION</MessageType> 
+ 	 	</Header> 
+ 	 	<MessageDetails> 
+ 	 	<ApplicationNumber>ESS1678796729374</ApplicationNumber> 
+ 	 	 	<Reason>Ok</Reason> 
+ 	 	 	<FSPReferenceNumber>TZ0010</FSPReferenceNumber> 
+ 	 	 	<LoanNumber>20070001</LoanNumber> 
+ 	 	 	<TotalAmountToPay>2500000</TotalAmountToPay> 
+ 	 	 	<OtherCharges>2500</OtherCharges> 
+ 	 	 	<Approval>APPROVED|| REJECTED</Approval> 
+ 	 	</MessageDetails> 
+ 	</Data> 
+ 	<Signature>XYZ</Signature> 
+</Document> 
+ 
+2.4.10 Restructuring Verification and Approval  
+Restructuring Approval Status Notification to FSP 
+S/N Item Name Item description Type Optional 1 Application number Loan application identification Varchar (15) NO 2 Reason Reason for offer rejection Varchar (150) YES 3 FSP 
+Reference number Unique FSP Reference number corresponding to request Varchar (20) NO 4 Approval APPROVED || REJECTED Varchar (10) NO 5 Loan Number Unique FSP number 
+that identify 
+restructuring application Varchar (20) YES  
+ 
+ 
+Message 29 
+<Document> 
+   <Data> 
+<Header> 
+      <Sender>ESS_UTUMISHI</Sender> 
+     <Receiver>FSPSystem</Receiver> 
+    <FSPCode>FL8090</FSPCode> 
+     <MsgId>FSP1234</MsgId> 
+<MessageType>LOAN_FINAL_APPROVAL_NOTIFICATION</MessageType>  </Header> 
+ <MessageDetails> 
+         <ApplicationNumber>ESS101</ApplicationNumber> 
+         <Reason>Not allowed</Reason> 
+          <FSPReferenceNumber>TZ001</FSPReferenceNumber> 
+          <LoanNumber>20070001</LoanNumber> 
+           <Approval>APPROVED || REJECTED</Approval> 
+           </MessageDetails></Data>         
+<Signature>XYZ</Signature> 
+</Document> 
+2.4.11 Employee Cancellation Notification to FSP 
+ Employee Cancel loan restructuring after submitting to FSP or Reject loan restructuring after FSP initial approval. FSP will respond with General Response. 
+S/N Item Name Item description Type Optional 1 Application number Loan application identification Varchar 
+(15) NO 2 Reason Reason for offer cancellation Varchar (150) NO 3 FSP 
+Reference number Unique FSP Reference number corresponding to request Varchar 
+(8) NO 4 Loan Number Unique FSP number that identify loan application Varchar 
+(20) Yes Message 30 
+<Document> 
+  <Data> 
+ 	<Header> 
+ 	 	<Sender>ESS_UTUMISHI</Sender> 
+ 	 	<Receiver>FSPSystem</Receiver> 
+ 	 	 <FSPCode>1001</FSPCode> 
+ 	 	<MsgId>FSP1234</MsgId> 
+ 	<MessageType>LOAN_CANCELLATION_NOTIFICATION</MessageType> 
+ 	</Header> 
+ 	    <MessageDetails> 
+ 	 	<ApplicationNumber>1002</ApplicationNumber>  	 	<Reason>reason</Reason> 
+ 	 	<FSPReferenceNumber>TZ2001</FSPReferenceNumber> 
+ 	 	<LoanNumber>20070001</LoanNumber> 
+ 	    </MessageDetails> 
+    </Data>         
+ 	<Signature>XYZ</Signature> 
+</Document> 
+ 
+2.4.12 Loan Restructuring Rejection Notification from employee to FSP 
+ Employee Reject loan restructuring request after FSP initiate loan restructuring. FSP will respond with General Response. 
+S/N Item Name Item description Type Optional 1 Application number Existing Loan application identification Varchar 
+(15) YES 2 Reason Reason for offer cancellation Varchar (150) NO 3 FSP 
+Reference number Unique FSP Reference number corresponding to request Varchar 
+(8) NO 4 Loan Number Existing Unique FSP number that identify loan application Varchar 
+(20) NO Message 31 
+<Document> 
+  <Data> 
+ 	<Header> 
+ 	 	<Sender>ESS_UTUMISHI</Sender> 
+ 	 	<Receiver>FSPSystem</Receiver> 
+ 	 	 <FSPCode>1001</FSPCode> 
+ 	 	<MsgId>FSP1234</MsgId> 
+ 	<MessageType>LOAN_RESTRUCTURE_REJECTION</MessageType> 
+ 	</Header> 
+ 	    <MessageDetails> 
+ 	 	<ApplicationNumber>1002</ApplicationNumber> 
+ 	 	<Reason>reason</Reason> 
+ 	 	<FSPReferenceNumber>TZ2001</FSPReferenceNumber> 
+ 	 	<LoanNumber>20070001</LoanNumber> 
+ 	    </MessageDetails> 
+    </Data>         
+ 	<Signature>XYZ</Signature> 
+</Document> 
+ 
+ 
+ 
+2.4.13 Loan Restructured Notification from FSP to ESS 
+FSP send Loan restructuring notification to ESS after process completed. 
+S/ N Item Name Item description Type Optional 1 Application number Loan application identification Varchar (15) NO 2 FSP 
+Reference number Unique FSP Reference number corresponding to request Varchar (8) NO 3 Loan Number Unique FSP number that identify loan application Varchar (20) NO 4 Total Amount to pay Total Amount to pay Number 
+(38,2) YES 5 Disbursement date Disbursement date String NO  
+Message 32 
+<Document> 
+  <Data> 
+ <Header> 
+ 	 	<Sender>ZE DONE</Sender> 
+ 	 	<Receiver>ESS_UTUMISHI</Receiver> 
+ 	 	 <FSPCode>1001</FSPCode> 
+ 	 	<MsgId>FSP1234</MsgId> 
+ 	<MessageType>LOAN_DISBURSEMENT_NOTIFICATION</MessageType> 
+ 	</Header> 
+            <MessageDetails> 
+                <ApplicationNumber>1002</ApplicationNumber> 
+                <Reason>I have desired not to apply</Reason> 
+                <FSPReferenceNumber>TZ001</FSPReferenceNumber> 
+                <LoanNumber>20070001</LoanNumber> 
+                <TotalAmountToPay>2500000</TotalAmountToPay> 
+                <DisbursementDate>2022-05-26T21:32:52</DisbursementDate> 
+            </MessageDetails> 
+    </Data>   
+ 	<Signature>XYZ</Signature> 
+</Document> 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+2.4.14 Loan Restructured Failure Notification from FSP to ESS 
+FSP send Loan restructuring Failure notification to ESS. 
+S/N Item Name Item description Type Optional 1 Application number Loan application identification Varchar (15) NO 2 Reason Description why disbursement 
+failure Varchar (255) NO  
+Message 33 
+<Document> 
+ 	<Data> 
+ 	 	<Header> 
+ 	 	 	<Sender>ZE DONE</Sender> 
+ 	 	 	<Receiver>ESS_UTUMISHI</Receiver> 
+ 	 	 	<FSPCode>1001</FSPCode> 
+ 	 	 	<MsgId>FSP12346</MsgId> 
+ 	 	 	 <MessageType> 
+ 	 	 	 	LOAN_DISBURSEMENT_FAILURE_NOTIFICATION 
+ 	 	 	</MessageType> 
+ 	 	</Header> 
+ 	 	<MessageDetails> 
+ 	 	 	<ApplicationNumber>ESS1002000</ApplicationNumber> 
+ 	 	 	<Reason>Technical issues</Reason> 
+ 	 	</MessageDetails> 
+ 	</Data> 
+ 	<Signature>XYZ</Signature> 
+</Document> 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+2.5 LOAN TAKEOVER  
+This explains steps to be taken when one FSP buys off another FSP’s Loan. It is a normal practice for Employees to sell off their loans to different FSPs. Hence, the detailed information below describes the flow when this scenario happens. 
+i. Employee login to government platforms 
+ii. Employee select existing loan 
+iii. Employee select loan Takeover 
+iv. Employee inquire loan balance and payment details from FSP1 
+v. FSP1 provides loan balance and payment details synchronously 
+vi. Employee select FSP2 product 
+vii. Employee request loan eligibility to FSP2 
+viii. FSP2 provide loan eligibility criteria  ix. 	Employee save and submit takeover request to FSP2 
+x. FSP2 receive and validate details 
+xi. FSP2 Approve loan offer (Reject or Accept) 
+xii. Employee Receive loan offer approval notification from FSP2 
+xiii. Employee decide on loan offer (Reject or Accept) 
+xiv. If Employee reject loan offer set reason and FSP2 will receive rejection notification 
+xv. If Employee Accept the offer, then loan offer submitted to employer 
+xvi. Employer accept or reject loan request 
+xvii. If employer accept FSP1 deduction will be paused and FSP2 deduction initiated 
+xviii. Employee and FSP2 receive employer acceptance approval notification 
+xix. FSP2 disburse loan and make payment to FSP1  
+xx. FSP2 send Payment and disbursement notification to ESS system 
+xxi. ESS system sends FSP2 payment details to FSP1 for confirmation 
+xxii. FSP1 Receive Payment Notification 
+xxiii. FSP1 send confirmation notification to ESS system 
+xxiv. If no confirmation from FSP1 within two hours, ESS system sends disbursement and payment notification to employer 
+xxv. If either payment or disbursement failed, FSP2 send take over disbursement failure notification to ESS system  xxvi. 	If no notification from FSP2 in two days, ESS system will reinstate original deduction to 
+        FSP1 and process ends xxvii. 	ESS system notifies Employer system on failure as started in xxiv 
+xxviii. 	Employer system remove FSP2 deduction and activate FSP1 deduction 
+ 
+2.5.1 Loan Takeover Balance and Payment Details Request to FSP1 
+ 
+S/ N Item Name Item description Type Optional 1 Check Number Employee identification Number (15) NO 2 Loan Number Loan number Varchar (25) NO 3 First Name Employee first name Varchar (30) NO 4 Middle Name Employee middle name Varchar (30) NO 5 Last Name Employee last name Varchar (30) NO 6 Vote Code Employer identification Varchar (6) NO 7 Vote Name Employer name Varchar (255) NO 8 Deduction Amount Deduction amount Number (38,2) NO 9 Deduction Code Deduction Identification Varchar (8) NO 10 Deduction 
+Name Deduction description Varchar (255) NO 11 Deduction Balance Deduction balance Number (38,2) NO 12 Payment Option Full Payment option Varchar (50) NO Message 34 
+<Document> 
+    <Data> 
+        <Header> 
+            <Sender>ESS_UTUMISHI</Sender> 
+            <Receiver>FSPSystem</Receiver> 
+           <FSPCode>1001</FSPCode> 
+            <MsgId>FSP1234</MsgId>  
+    <MessageType>TAKEOVER_PAY_OFF_BALANCE_REQUEST</MessageType> 
+        </Header> 
+                <MessageDetails> 
+                    <CheckNumber>111276112</CheckNumber> 
+                    <LoanNumber>AA11100000</LoanNumber> 
+                    <FirstName>Simba</FirstName> 
+                    <MiddleName>Mapunda</MiddleName> 
+                    <LastName>Nguchiro</LastName> 
+                    <VoteCode>32A</VoteCode> 
+                    <VoteName>Watumishi</VoteName> 
+                    <DeductionAmount>300000.89</DeductionAmount> 
+                    <DeductionCode>NY908</DeductionCode> 
+                    <DeductionName>Mawenzi Deduction</DeductionName> 
+                    <DeductionBalance>4000800000.05</DeductionBalance> 
+                    <PaymentOption>Full Payment</PaymentOption> 
+                </MessageDetails> 
+    </Data> 
+    <Signature>XYZ</Signature> 
+</Document> 
+ 
+ 
+ 
+2.5.2 Loan Takeover Balance and Payment Details Response from FSP1 
+FSP1 provide balance and payment details response with detail as shown here below or else use General response in case of failure or provide any message to employee. 
+S/N Item Name Item description Type Optional 1 Loan Number Unique number that identifies loan Varchar (20) NO 2 Total Payoff 
+Amount Total amount to pay Number (38,2) NO 3 FSP Code FSP identification Varchar (10) NO 4 Deduction End Date Maturity Date of existing deduction Date time NO 5 Last Deduction Date Date of FSP receive deduction from Hazina or Payroll date Date time NO 6 FSP Bank Account Account Number Varchar (20) NO 7 FSP Bank Account Name Account Name Varchar (255) NO 8 SWIFT Code Bank SWIFT Code Varchar (8) NO 9 MNO Channels Mobile Number or till number Varchar (15) YES  10 Payment 
+Reference Number Unique transaction reference number Varchar (30) NO 11 Final Payment Date Date for payment to be accepted or settled Date time NO   12 Outstanding Balance Total Outstanding Balance Number (38,2) NO 14 FSP Reference Number Unique FSP number corresponding to request Varchar (8) NO  
+Message 35 
+<Document> 
+  <Data> 
+ 	<Header> 
+ 	 	<Sender>ZE DONE</Sender> 
+ 	 	<Receiver>ESS_UTUMISHI</Receiver> 
+ 	 	<FSPCode>FL8090</FSPCode> 
+ 	 	<MsgId>FSP12346</MsgId> 
+<MessageType>LOAN_TAKEOVER_BALANCE_RESPONSE</MessageType> 
+ 	</Header> 
+        <MessageDetails> 
+ 	 	    <LoanNumber>A1200000002</LoanNumber> 
+ 	 	    <FSPCode>1001</FSPCode>  	 	    <FSPReferenceNumber>2343453345</FSPReferenceNumber> 
+ 	 	    <PaymentReferenceNumber>A22211</PaymentReferenceNumber> 
+ 	 	    <TotalPayOffAmount>77122876112.60</TotalPayOffAmount> 
+ 	 	   <OutstandingBalance>1150397</OutstandingBalance> 
+ 	 	   <FSPBankAccount>A12356778888</FSPBankAccount> 
+ 	 	   <FSPBankAccountName>LOAN</FSPBankAccountName> 
+ 	 	   <SWIFTCode>A5000</SWIFTCode> 
+ 	 	   <MNOChannels>255758482039</MNOChannels> 
+ 	 	<FinalPaymentDate>2022-04-23T10:20:15</FinalPaymentDate> 
+ 	 	<LastDeductionDate>2022-02-23T10:20:15</LastDeductionDate> 
+ 	 	<DeductionEndDate>2022-03-23T10:20:15</DeductionEndDate> 
+ 	 	</MessageDetails> 
+    </Data>   
+ 	<Signature>XYZ</Signature> 
+</Document> 
+ 
+2.5.3 Loan Takeover Charges Request from Employee to FSP 
+This is on demand and sync API request to get possible loan charges from FSP. Response will as in table below or general response in case of failure or FSP want to provide a message to employee. 
+S/ N Item Name Item description Type Optional 1 Check Number Employee identification Number (9) NO 2 Designation Code Designation Identification Varchar (8) NO 3 Designation Name Designation description Varchar (255) NO 4 Basic Salary Basic salary Number (38,2) NO 5 Net Salary Amount after deduction Number (38,2) NO 6 One Third Amount Minimum amount after deduction Number (38,2) NO 7 Deductible Amount Net salary – 1/3 amount Number (38,2) NO 8 Retirement Date Employee retirement year - birth date Number (3) NO 9 Terms of 
+Employment Permanent or Contractual Varchar (30) NO 10 Requested Amount Loan amount Number (38,2) YES 11 Desired 
+Deductible 
+Amount Desired deduction amount Number (38,2) YES 12 Tenure Repayment period Number (3) YES 13 FSP code FSP identification Varchar (10) NO 14 Product Code Product identification Varchar (8) NO 15 Vote Code Vote/institution identification code Varchar (10) NO 16 Total Employee Deduction Total existing employee deduction amount Number (38,2) NO 17 Job Class Code Identifier for a Group of Designations Varchar (10) NO Message 36 
+<Document> 
+ <Data> 
+ 	<Header> 
+ 	 	<Sender>ESS_UTUMISHI</Sender> 
+ 	 	<Receiver>FSPSystem</Receiver> 
+ 	 	<FSPCode>1001</FSPCode> 
+ 	 	<MsgId>90769af68ef011ecb3a6432feaa9296f</MsgId> 
+ 	 	<MessageType>LOAN_CHARGES_REQUEST</MessageType> 
+ 	</Header> 
+ 	 	<MessageDetails> 
+ 	 	   <CheckNumber>111222303</CheckNumber> 
+ 	 	  <DesignationCode>TZ800186</DesignationCode> 
+                        <DesignationName>ICTO II</DesignationName> 
+ 	 	 <BasicSalary>5000.00</BasicSalary> 
+ 	 	 <NetSalary>10000.00</NetSalary> 
+ 	 	<OneThirdAmount>12000.00</OneThirdAmount> 
+ 	 	<RequestedAmount>5000.00</RequestedAmount> 
+ 	 	<DeductibleAmount>12000.00</DeductibleAmount> 
+                      <DesiredDeductibleAmount>12000.00</DesiredDeductibleAmount> 
+ 	 	<RetirementDate>3</RetirementDate> 
+ 	 	<TermsOfEmployment>Permanent and Pensionable 
+                       </TermsOfEmployment> 
+ 	 	<Tenure>45</Tenure> 
+ 	 	<ProductCode>22346</ProductCode> 
+ 	 	<VoteCode>32A</VoteCode> 
+ 	 	<TotalEmployeeDeduction>120000.00</TotalEmployeeDeduction> 
+                      <JobClassCode>JB0012</JobClassCode> 
+ 	 	</MessageDetails> 
+ 	</Data> 
+ 	<Signature>Signature</Signature> 
+</Document> 
+ 
+ 
+ 
+ 
+ 
+ 
+2.5.4 Possible Loan Takeover Charges Response from FSP to Employee 
+
+	S/N 	Item Name 	Item description 	Type 	Optional 
+1 Desired 
+Deductible 
+Amount Desired deduction amount Number (38,2) YES 2 Total Insurance Total Loan Insurance charges Number (38,2) NO 3 Total 
+Processing Fees Total Loan Processing Fees charges Number (38,2) YES 4 Total Interest Rate Amount Total Loan Interest Rate amount charges Number (38,2) NO 5 Other Charges Total Loan Other Charges Number (38,2) YES 6 Net Loan Amount Total Net Loan Amount employee can get Number (38,2) NO 7 Total Amount to Pay Total Amount employee can pay back Number (38,2) NO 8 Tenure Repayment period Number (3) NO 9 Eligible Amount Maximum loan employee can get Number (38,2) YES 10 Monthly Return Amount Amount employee can return in each month Number (38,2) NO  
+Message 37 <Document> 
+ <Data> 
+ 	<Header> 
+ 	 	<Sender>ESS_UTUMISHI</Sender> 
+ 	 	<Receiver>FSPName</Receiver> 
+ 	 	<FSPCode>FL8090</FSPCode> 
+ 	 	<MsgId>90769af68ef011ecb3a6432feaa9296f</MsgId> 
+ 	 	<MessageType>LOAN_CHARGES_RESPONSE</MessageType> 
+ 	</Header> 
+ 	 	<MessageDetails> 
+ 	 	       <DesiredDeductibleAmount>5000.00</DesiredDeductibleAmount> 
+ 	 	 	<TotalInsurance>5000.00</TotalInsurance> 
+ 	 	 	<TotalProcessingFees>100.00</TotalProcessingFees> 
+ 	 	 	<TotalInterestRateAmount>5000.00</TotalInterestRateAmount> 
+ 	 	 	<OtherCharges>12000.00</OtherCharges> 
+ 	 	 	<NetLoanAmount>12000.00</NetLoanAmount> 
+ 	 	 	<TotalAmountToPay>12000.00</TotalAmountToPay> 
+ 	 	 	<Tenure>36</Tenure> 
+ 	 	 	<EligibleAmount>6731040.52</EligibleAmount> 
+ 	 	 	<MonthlyReturnAmount>10000.52</MonthlyReturnAmount> 
+ 	 	</MessageDetails> 
+ 	</Data> 
+ 	<Signature>Signature</Signature> 
+</Document> 
+2.5.5 Loan Takeover Request from Employee to FSP2 
+S/N Item Name Item description Type Optional 1 Check number Employee identification Number (9) NO 2 First Name Employee First Name Varchar (30) NO 3 Middle Name Employee Middle Name Varchar (30) NO 4 Last Name Employee Last Name Varchar (30) NO 5 Sex Employee sex Varchar (1) NO 6 Employment Date Employee Employment Date Varchar (10) NO 7 Marital Status Employee marital status Varchar (10) NO 8 Confirmation Date Employee confirmation date Varchar (10) YES 9 Bank Account Number Employee bank account number Varchar (20) NO 10 Nearest Branch 
+Name Employee nearest bank branch Varchar (50) YES 11 Nearest Branch Code Employee nearest bank code Varchar (50) YES 12 Vote code Employer identification Varchar (6) NO 13 Vote name Employer name Varchar (255) NO 14 NIN National identification number Varchar (22) NO 15 Designation code Designation Identification Varchar (8) NO 16 Designation name Designation description Varchar (255) NO 17 Basic Salary Basic salary Number (38,2) NO 18 Net salary Amount after deduction Number (38,2) NO 19 One third amount Minimum amount after deduction Number (38,2) NO 20 Deductible amount Net salary – 1/3 amount Number (38,2) NO 21  Total 
+Employee 
+Deduction Total existing employee deduction amount Number (38,2) NO 
+22 Retirement date Employee retirement year - birth date Number (3) NO 23 Terms of 
+Employment Permanent or Contractual Varchar (30) NO 24 Requested Amount Loan amount Number (38,2) YES 25 Desired 
+Deductible 
+Amount Desired deduction amount Number (38,2) YES 26 Tenure Repayment period Number (3) NO 27 FSP Code FSP2 identification code Varchar (10) NO 28 Product Code FSP2 Product 
+identification Varchar (8) NO 29 Interest Rate Total Interest amount to be paid Number (38,2) NO 30 Processing Fee Total Loan fees Number (38,2) NO 31 Insurance Loan cover amount Number (38,2) NO 32 Physical Address Physical address Varchar (50) NO 33 Telephone Number Telephone number Varchar (12) YES 34 Email Address Email address Varchar (50) NO 35 Mobile Number Mobile number Varchar (12) NO 36 Application 
+Number Loan application identification Varchar (15) NO 37 Loan Purpose Reason for loan request Varchar (250) NO 38 Contract Start Date Employee contract start date (Optional) Varchar (10) YES 39 Contract End Date Employee contract end date (Optional) Varchar (10) YES 40 Swift Code FSP2 Bank swift code Varchar (50) No 41 Funding Employee source of salary payment Varchar (50) No  42 FSP1 Bank Account FSP1 Account Number Varchar (15) NO  43 FSP1 Bank 
+Account Name FSP1 Account Name Varchar (50) NO  44 FSP1 SWIFT Code FSP1 Bank SWIFT Code Varchar (12) NO  45 FSP1 MNO Channel Mobile Number Varchar (15) YES  46 FSP1 Payment 
+Reference 
+Number Unique transaction number Varchar (30) NO  47 FSP1 Final 
+Payment Date Last date for payment to be accepted or settlement done Datetime NO  48 FSP1 Loan Number FSP1 unique identifier for existing loan Varchar (20) NO  49 FSP1 Takeover Amount FSP1 Takeover Amount to be paid or settled by 
+FSP2 Number (38,2) NO 50 FSP1 Code FSP Identifier Varchar (20) NO Message 38 
+<Document> 
+  <Data> 
+ 	<Header> 
+ 	 	<Sender>ESS_UTUMISHI</Sender> 
+ 	 	<Receiver>FSPSystem</Receiver> 
+ 	 	<FSPCode>1001</FSPCode>  
+ 	 	<MsgId>FSP1234</MsgId> 
+ 	 	<MessageType> 
+ 	 	LOAN_TAKEOVER_OFFER_REQUEST 
+ 	 	</MessageType> 
+ 	</Header> 
+            <MessageDetails> 
+ 	 	<CheckNumber>111222333</CheckNumber> 
+ 	 	<FirstName>Juma</FirstName> 
+ 	 	<MiddleName>Ponda</MiddleName> 
+ 	 	<LastName>Mali</LastName> 
+ 	 	<Sex>M</Sex> 
+<EmploymentStatus>FT</EmploymentStatus> 
+ 	 	<BankAccountNumber>011445888578</BankAccountNumber> 
+ 	 	<EmploymentDate>2020-07-01</EmploymentDate> 
+ 	 	<MaritalStatus>Married</MaritalStatus> 
+ 	 	<ConfirmationDate>2021-07-01</ConfirmationDate> 
+ 	 	<TotalEmployeeDeduction>205500</TotalEmployeeDeduction> 
+ 	 	<NearestBranchName>A Manyoni</NearestBranchName> 
+ 	 	<NearestBranchCode>AX002</NearestBranchCode> 
+ 	 	<VoteCode>32</VoteCode> 
+ 	 	<VoteName>XYZ</VoteName>  	 	<NIN>19870527111450000124</NIN> 
+ 	 	<DesignationCode>TZ800186</DesignationCode> 
+ 	 	<DesignationName>ICTOII</DesignationName> 
+ 	 	<BasicSalary>5000.00</BasicSalary> 
+ 	 	<NetSalary>100.00</NetSalary> 
+ 	 	<OneThirdAmount>120000.00</OneThirdAmount> 
+<DeductibleAmount>6000.00</DeductibleAmount> 
+ 	 	<RequestedAmount>5000.00</RequestedAmount> 
+ 	 	<DesiredDeductibleAmount>12000.00 
+ 	 	</DesiredDeductibleAmount> 
+ 	 	<RetirementDate>3</RetirementDate> 
+ 	 	<TermsOfEmployment>Permanent and Pensionable 
+ 	 	</TermsOfEmployment> 
+ 	 	<Tenure>45</Tenure> 
+ 	 	<ProductCode>A22346</ProductCode> 
+ 	 	<InterestRate>20.00</InterestRate> 
+ 	 	<ProcessingFee>200.00</ProcessingFee> 
+ 	 	<Insurance>500.00</Insurance> 
+ 	 	<PhysicalAddress>Arusha</PhysicalAddress> 
+ 	 	<EmailAddress>abc.abc@instution.com</EmailAddress> 
+ 	 	<MobileNumber>0758484339</MobileNumber> 
+<TelephoneNumber>0758484339</TelephoneNumber>  	 	<ApplicationNumber>AA0021000</ApplicationNumber> 
+ 	 	<LoanPurpose> Mkopo wakujenga nyumba </LoanPurpose> 
+ 	 	<ContractStartDate>2011-02-25</ContractStartDate> 
+ 	 	<ContractEndDate>2025-02-25 </ContractEndDate> 
+ 	 	<SwiftCode>AXB02</SwiftCode> 
+ 	 	<Funding>OS</Funding> 
+ 	 	<FSP1Code>445BN</FSP1Code> 
+ 	 	<FSP1SWIFTCode>99099</FSP1SWIFTCode> 
+                     <FSP1BankAccount>758595X088</FSP1BankAccount> 
+ 	 	<FSP1BankAccountName>XYZ</FSP1BankAccountName> 
+ 	 	<FSP1MNOChannel>Channel</FSP1MNOChannel> 
+ 	 	<FSP1LoanNumber>077890XX444</FSP1LoanNumber> 
+ 	 	<FSP1PaymentReferenceNumber>858949494 
+ 	 	</FSP1PaymentReferenceNumbe> 
+ 	 	<FSP1FinalPaymentDate>2022-05-26T21:32:52 
+ 	 	</FSP1FinalPaymentDate> 
+ 	 	<TakeOverAmount>3000000.02</TakeOverAmount> 
+ 	  
+ </MessageDetails> 
+    </Data>   
+ 	<Signature>XYZ</Signature> 
+</Document> 
+ 
+2.5.6 Loan Takeover Approval Notification from FSP2 to Employee    
+This is API to notify ESS on submitted loan takeover offer approval (Accepted or Rejected)  
+S/ N Item Name Item description Type Option
+al 1 Application number Loan application identification Varchar (15) NO 2 Reason Reason for offer rejection Varchar (150) YES 3 FSP 
+Reference number Unique FSP Reference number corresponding to request Varchar (8) YES 4 Other charges Other charges Number (38,2) YES 5 Approval Acceptance use APPROVED or Rejection use REJECTED Varchar (10) NO 6 Loan Number Unique FSP number 
+that identify loan application Varchar (20) YES  
+Message 39 
+<Document> 
+  <Data> 
+ 	<Header> 
+ 	 	<Sender>ZE DONE</Sender> 
+ 	 	<Receiver>ESS_UTUMISHI</Receiver> 
+ 	 	<FSPCode>1001</FSPCode> 
+ 	 	<MsgId>FSP1234</MsgId> <MessageType> 
+LOAN_INITIAL_APPROVAL_NOTIFICATION 
+</MessageType> 
+ 	</Header> 
+            <MessageDetails> 
+                <ApplicationNumber>1002</ApplicationNumber> 
+                <Reason>Not allowed</Reason> 
+                <FSPReferenceNumber>TZ001</FSPReferenceNumber> 
+                <LoanNumber>20070001</LoanNumber> 
+                <TotalAmountToPay>2500000.0</TotalAmountToPay> 
+                <OtherCharges>2500.0</OtherCharges> 
+                <Approval>APPROVED || REJECTED</Approval> 
+            </MessageDetails> 
+    </Data>         
+ 	<Signature>XYZ</Signature> </Document> 
+ 
+2.5.7 Loan Takeover Cancel/Rejection by Employee to FSP2 
+This API is for notifying FSP2 on employee takeover offer rejection. The FSP2 response will be general response. 
+S/N Item Name Item description Type Optional 1 Application number Loan application identification Varchar (15) NO 2 Reason Reason for offer rejection Text NO 3 FSP Reference number Unique FSP Reference number corresponding to request Varchar (20) NO 4 Loan Number Unique FSP number that identify loan application Varchar 
+(20) YES  
+Message 40 
+<Document> 
+  <Data> 
+ 	<Header> 
+ 	  <Sender>ESS_UTUMISHI</Sender> 
+ 	 <Receiver>FSPSystem</Receiver> 
+  	 <FSPCode>1001</FSPCode> 
+ 	 <MsgId>FSP1234</MsgId> 
+ <MessageType>LOAN_CANCELLATION_NOTIFICATION</MessageType> 
+ 	</Header> 
+ 	    <MessageDetails> 
+ 	 	<ApplicationNumber>1002</ApplicationNumber> 
+ 	 	<Reason>reason</Reason> 
+ 	 	<FSPReferenceNumber>TZ2001</FSPReferenceNumber> 
+ 	 	<LoanNumber>20070001</LoanNumber> 
+ 	    </MessageDetails> 
+    </Data>         
+ 	<Signature>XYZ</Signature> 
+</Document> 	 
+ 
+2.5.8 Loan Takeover Employer Approval Notification 
+Loan Takeover Employer Approval Notification from ESS to FSP2 
+S/ N Item Name Item description Type Optional 1 Application number Loan application identification Varchar (15) NO 2 Reason Reason for offer rejection Varchar (150) YES 3 FSP 
+Reference number Unique FSP Reference number corresponding to request Varchar (8) NO 4 Approval APPROVED || REJECTED Varchar (10) NO 5 Loan Number Unique FSP number that identify loan application Varchar (20) YES Message 41 
+<Document> 
+   <Data> 
+<Header> 
+   <Sender>ESS_UTUMISHI</Sender> 
+   <Receiver>FSPSystem</Receiver> 
+  <FSPCode>FL8090</FSPCode> 
+    <MsgId>FSP1234</MsgId>  
+<MessageType>LOAN_FINAL_APPROVAL_NOTIFICATION</MessageType>  </Header> 
+ <MessageDetails> 
+         <ApplicationNumber>ESS101</ApplicationNumber> 
+         <Reason>Not allowed</Reason> 
+          <FSPReferenceNumber>TZ001</FSPReferenceNumber> 
+          <LoanNumber>20070001</LoanNumber> 
+           <Approval>APPROVED || REJECTED</Approval> 
+           </MessageDetails></Data>         
+<Signature>XYZ</Signature> 
+</Document> 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+2.5.9 Disbursement Notification from FSP2 to ESS 
+This API is for notifying ESS on payment made by FSP2 to FSP1 and disbursement on employee bank account. The ESS response will be general response. 
+  
+S/N Item Name Item description Type Optional 1 Application number Loan application identification Varchar (15) NO 2 FSP Reference number Unique FSP Reference number corresponding to request Varchar (20) NO 3 Total Amount to pay Loan amount including interest Number (38,2) NO 4 Disbursement date Date Money deposited into Employee account Date Time NO 5 Reason disbursement reason Varchar (100) NO 6 Payment advice Content of payment advice in MT/ISO20022 format Text NO 7 Payment advice Attachment PDF Payment Details Attachment in base 64 string format Text NO  
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+   
+   
+Message 42 
+<Document> 
+  <Data> 
+ 	<Header> 
+ 	 	<Sender>ESS_UTUMISHI</Sender> 
+ 	 	<Receiver>FSPSystem</Receiver> 
+ 	 	<FSPCode>1001</FSPCode> 
+ 	 	<MsgId>FSP1234</MsgId> 
+<MessageType>TAKEOVER_DISBURSEMENT_NOTIFICATION</MessageType> 
+ 	</Header> 
+            <MessageDetails> 
+                <ApplicationNumber>1002</ApplicationNumber> 
+                <Reason>Disbursed</Reason> 
+                <FSPReferenceNumber>TZ001</FSPReferenceNumber> 
+                <LoanNumber>20070001</LoanNumber> 
+                <TotalAmountToPay>2500000</TotalAmountToPay> 
+                <DisbursementDate>2022-05-26T21:32:52</DisbursementDate> 
+<PaymentAdvice>MT/ISO20022</PaymentAdvice> 
+<PaymentAdviceAttachment>base64string</PaymentAdviceAttachment> 
+            </MessageDetails> 
+   	  </Data>   
+ 	<Signature>XYZ</Signature> 
+	</Document> 	 
+
+2.5.10 Disbursement Failure Notification from FSP2 to ESS 
+This API is for notifying ESS on payment failure from FSP2 to FSP1 or disbursement failure on employee account. The response from ESS will be general response. 
+ 
+S/N Item Name Item description Type Optional 1 Application number Loan application identification Varchar (15) NO 2 Reason Description why disbursement 
+failure Varchar (255) NO Message 43 
+<Document> 
+ 	<Data> 
+ 	 	<Header> 
+ 	 	 	<Sender>ZE DONE</Sender> 
+ 	 	 	<Receiver>ESS_UTUMISHI</Receiver> 
+ 	 	 	<FSPCode>1001</FSPCode> 
+ 	 	 	<MsgId>FSP12346</MsgId> 
+ 	 	 	 <MessageType> 
+ 	 	 	 	LOAN_DISBURSEMENT_FAILURE_NOTIFICATION 
+ 	 	 	</MessageType> 
+ 	 	</Header> 
+ 	 	<MessageDetails> 
+ 	 	 	<ApplicationNumber>ESS1002000</ApplicationNumber> 
+ 	 	 	<Reason>Technical issues</Reason> 
+ 	 	</MessageDetails> 
+ 	</Data> 
+ 	<Signature>XYZ</Signature> 
+</Document> 
+ 
+ 
+2.5.11 Payment Notification from ESS to FSP1  
+This API is for notifying FSP1 on payment done by FSP2 after successful disburse loan to Employee and make payment to FSP1. The response from FSP1 will be general response. 
+ 
+S/N Item Name Item description Type Optional 1 Application number Loan application identification from ESS Varchar (15) NO 2 Loan number Loan application identification from FSP Varchar (15) NO 3 Payment Reference number Unique transaction reference number Varchar (30) NO 4 FSP Reference number FSP Reference number corresponding to request Varchar (20) NO 5 Total Payoff Amount Total paid Amount Number (38,2) NO 6 Payment date A date when Money deposited into FSP1 account Date Time NO 7 Payment advice Content of payment advice in MT/ISO20022 format Text NO 8 Payment advice Attachment PDF Payment Details Attachment in base 64 format Text NO  
+Message 44 
+<Document> 
+  <Data> 
+ 	<Header> 
+ 	 	<Sender>ESS_UTUMISHI</Sender> 
+ 	 	<Receiver>FSPSystem</Receiver> 
+ 	 	<FSPCode>1001</FSPCode> 
+ 	 	<MsgId>FSP1234</MsgId> 
+<MessageType>TAKEOVER_PAYMENT_NOTIFICATION</MessageType> 
+ 	</Header> 
+            <MessageDetails> 
+ 	      <ApplicationNumber>ESS1002</ ApplicationNumber > 
+                <LoanNumber>1002</LoanNumber> 
+                <Reason>Disbursed</Reason> 
+                <FSPReferenceNumber>TZ001</FSPReferenceNumber> 
+                <PaymentReferenceNumber>20070001</ PaymentReferenceNumber> 
+                < TotalPayoffAmount>2500000.00</TotalPayoffAmount > 
+                <PaymentDate>2022-05-26T21:32:52</PaymentDate> 
+<PaymentAdvice>MT/ISO20022</PaymentAdvice> 
+<PaymentAdviceAttachment>MMO</PaymentAdviceAttachment> 
+            </MessageDetails> 
+   	  </Data>   
+ 	<Signature>XYZ</Signature> 
+</Document> 
+ 	 
+2.5.12 Payment Acknowledgment Notification from FSP1 to ESS  
+Loan Takeover payment acknowledgment from to FSP1 to ESS. This will be a call back request that will waiting within two hours after receiving proof of Payment. 
+S/ N Item Name Item description Type Optional 1 Application number Loan application identification Varchar (15) NO 2 Remarks Short description of payment  Varchar (255) YES 3 FSP 
+Reference number Unique FSP Reference number corresponding to request Varchar (8) NO 4 Payment Status SETTLED || UNSETTLED Varchar (10) NO 5 Loan Number Unique FSP number that identify loan application Varchar (20) YES  
+Message 45 
+<Document> 
+   <Data> 
+<Header> 
+   <Sender>ESS_UTUMISHI</Sender> 
+   <Receiver>FSPSystem</Receiver> 
+  <FSPCode>FL8090</FSPCode> 
+    <MsgId>FSP1234</MsgId>  
+<MessageType>PAYMENT_ACKNOWLEDGMENT_NOTIFICATION 
+           </MessageType> 
+ </Header> 
+ <MessageDetails> 
+         <ApplicationNumber>ESS101</ApplicationNumber> 
+         <Remarks>Not settled</Remarks> 
+          <FSPReferenceNumber>TZ001</FSPReferenceNumber> 
+          <LoanNumber>C20070001</LoanNumber> 
+           <PaymentStatus>SETTLED || UNSETTLED</PaymentStatus> 
+           </MessageDetails></Data>         
+<Signature>XYZ</Signature> 
+</Document> 
+ 
+ 
+ 
+ 
+ 
+2.6 LOAN MONITORING AND REPAYMENTS 
+After completion of loan processing and disbursement, the next process is repayment of the loaned product. This will depend on the loan repayment schedule (i.e monthly, annually, bi monthly e.t.c). This process explains how the loan will be repaid, information submitted to FSP and response exchanges between different Systems. 
+2.6.1 Loan Repayments from Employer/Month Deduction 
+i. Employer Deducts installment amount 
+ii. Employer provides monthly deduction details to FSP 
+iii. Employer makes payment to FSP 
+iv. FSP reconcile and confirm payment 
+v. FSP acknowledge payment to employer 
+vi. FSP affects the installment to the respective loan accounts. 
+ 
+FSP repayment request details (On demand for previous months data) 
+S/N Item Name Item description Type Optional 1 Deduction code Deduction Identification Varchar (8) NO 2 Vote code Employer identifier 
+(Employee Institution) Varchar (8) NO 3 Vote Name Name of the Employee 
+Institution Varchar (255) NO 4 Check Number Employee identifier Number (9) NO 5 FirstName Employee first name Varchar (30) NO 6 Middle Name Employee middle name Varchar (30) NO 7 Last Name Employee last name Varchar (30) NO 8 FSP code FSP identification Varchar (10) NO 9 Pay date Date of repayment Date NO  
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+Message 46 
+<Document> 
+  <Data> 
+ 	<Header> 
+ 	 	<Sender>ESS_UTUMISHI</Sender> 
+ 	 	<Receiver>FSPName</Receiver> 
+ 	 	<FSPCode>1001</FSPCode> 
+ 	 	<MsgId>90769af68ef011ecb3a6432feaa9296f</MsgId> 
+ 	 	<MessageType>FSP_REPAYMENT_REQUEST</MessageType> 
+ 	</Header> 
+ 	 	<MessageDetails> 
+ 	 	 	<DeductionCode>00101</DeductionCode> 
+ 	 	 	<VoteCode> 32</VoteCode> 
+ 	 	 	<VoteName> UTUMISHI</VoteName> 
+ 	 	 	<CheckNumber>123456789 </CheckNumber> 
+ 	 	 	<FirstName>Simba</FirstName> 
+                                   <MiddleName>Mapunda</MiddleName> 
+                                   <LastName>Nguchiro</LastName> 
+ 	 	 	<PayDate>2022-05-26T21:32:52</PayDate> 
+ 	 	</MessageDetails> 
+ 	</Data> 	 
+ 	<Signature>Signature</Signature> 
+</Document> 
+Deduction payment details to FSP  
+S/N Item Name Item description Type Optional 1 FSP Bank account Account number Varchar (8) NO 2 FSP Bank account name Account Name Varchar (10) NO 3 SWIFT code Bank SWIFT Code Varchar (8) YES 4 Payment reference Payment reference number Varchar (8) NO 5 Total amount Amount paid Number (38,2) NO 6 Payment 
+description Description as to what payment is being made Varchar (50) NO 7 Payment date Date payment made Date NO  
+ 
+         
+Message 47 
+<Document> 
+            <Data> 
+                        <Header> 
+                            <Sender>ZE DONE</Sender> 
+                            <Receiver>ESS_UTUMISHI</Receiver> 
+  	 	     <FSPCode>1001</FSPCode> 
+                            <MsgId>FSP1234</MsgId> 
+                       <MessageType> 
+                         REPAYMENT_0FF_BALANCE_REQUEST_TO_FSP 
+                       </MessageType> 
+                         </Header> 
+                            <MessageDetails> 
+                                 <TotalPayOffAmount>1200000</TotalPayOffAmount> 
+                                  <LoanNumber>12</LoanNumber> 
+                              <LastDeductionDate>2022-05-26T21:32:52</LastDeductionDate> 
+                                  <FSPBankAccount>12356778888</FSPBankAccount> 
+                                  <FSPBankAccountName>LOAN</FSPBankAccountName> 
+                                  <SWIFTCode>5000</SWIFTCode> 
+                                  <MNOChannels>0089</MNOChannels> 
+                            <PaymentReferenceNumber>22211</PaymentReferenceNumber> 
+                            <FinalPaymentDate>2022-05-26T21:32:52</FinalPaymentDate> 
+                            <EndDate>2022-05-26T21:32:52</EndDate> 
+                       </MessageDetails> 
+            </Data> 
+           <Signature>XYZ</Signature> 
+</Document> 
+ 
+2.6.2 Loan Repayments from Employee 
+From time-to-time employees do decide to liquidate their loaned Item before maturity time. In this case employees do pay off the outstanding loan amount after communicating with their respective FSP and being served with a revised final pay off amount. This process has two scenarios where one Employee needs to liquidate the whole loan and the other Employee needs to partially reduce the loan by either paying off some of the principal amount or reducing the repayment time. 
+i. Employee login to government platform  
+ii. Employee select payment option  
+ 
+B1.  Full payment 
+i. 	Employee Enquire loan payoff balance  ii. 	FSP provides loan balance and payment details (reference number) iii. 	Employee make payment using reference number iv. 	FSP acknowledge payment to employee 
+v. 	FSP notify the employer about the loan payment vi. 	Employer update loan details 
+ 
+NB. Employee notify FSP and Employer in case of failure 
+ 
+Loan payoff request details  
+S/N Item Name Item description Type Optional 1 Check number Employee identification Number (9) NO 2 Loan number Loan number Varchar (8) NO 3 First Name Employee first name Varchar (30) NO 4 Middle Name Employee middle name Varchar (30) NO 5 Last Name Employee last name Varchar (30) NO 6 Vote code Employer identification Varchar (6) NO 7 Vote name Employer name Varchar (255) NO 8 Deduction amount Deduction amount Number (38,2) NO 9 Deduction code Designation Identification Varchar (8) NO 10 Deduction name Designation description Varchar (255) NO 11 Deduction balance Deduction balance Number (38,2) NO 12 FSP code FSP identification Varchar (10) NO 13 Payment option Full Payment option Varchar (50) NO  
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+Message 48 
+<Document> 
+  <Data> 
+	 	<Header> 
+	 	 	<Sender>ESS_UTUMISHI</Sender> 
+	 	 	<Receiver>FSPSystem</Receiver> 
+                     <FSPCode>1001</FSPCode> 
+	 	 	<MsgId>FSP1234</MsgId> 
+<MessageType>FULL_LOAN_REPAYMENT_REQUEST</MessageType> 
+	 	</Header> 
+            <MessageDetails> 
+                               <CheckNumber>77122876112</CheckNumber> 
+	 	 	 	<LoanNumber>1111</LoanNumber> 
+	 	 	 	<FirstName>Simba</FirstName> 
+                                             <MiddleName>Mapunda</MiddleName> 
+                                 <LastName>Nguchiro</LastName> 
+	 	 	 	<VoteCode>23</VoteCode> 
+	 	 	 	<VoteName>UTUMISHI</VoteName> 
+	 	 	 	<DeductionAmount>500000</DeductionAmount> 
+	 	 	 	<DeductionCode>0089</DeductionCode> 
+	 	 	 	<DeductionName>deduction</DeductionName> 
+	 	 	 	<DeductionBalance>50000</DeductionBalance> 
+	 	 	 	<PaymentOption>Full payment</PaymentOption> 
+            </MessageDetails> 
+    </Data>   
+	 	<Signature>XYZ</Signature> 
+</Document> 
+ 
+Loan pays off payment details/Response from FSP 
+S/ N Item Name Item description Type Optional 1 Loan number Loan number Varchar (8) NO 2 Total payoff amount Total amount to pay Number 
+(38,2) NO 3 FSP code FSP identification Varchar (10) NO 4 End date Loan end date Varchar (8) NO 5 Last deduction date Last payment date Date NO 6 FSP Bank account Account Number Varchar (8) NO 7 FSP Bank account name Account Name Varchar (10) NO 8 SWIFT code Bank SWIFT Code Varchar (8) NO 9 MNO Channels Mobile Number Operator name Varchar (50) YES 10 Payment reference number Payment reference number Varchar (8) NO 11 Final Payment date Last date for payment to be accepted Date time NO  
+Message 49 
+<Document> 
+    <Data> 
+<Header> 
+         <Sender>ZE DONE</Sender> 
+        <Receiver>ESS_UTUMISHI</Receiver> 
+        <FSPCode>1001</FSPCode> 
+       <MsgId>FSP12346</MsgId> 
+<MessageType>FULL_REPAYMENT_0FF_BALANCE_RESPONSE 
+</MessageType> 
+            </Header> 
+<MessageDetails> 
+<TotalPayOffAmount>1200000</TotalPayOffAmount> 
+<LoanNumber>12</LoanNumber>                                         
+<LastDeductionDate>2022-05-26T21:32:52</LastDeductionDate> 
+<FSPBankAccount>12356778888</FSPBankAccount> 
+<FSPBankAccountName>LOAN</FSPBankAccountName> 
+<SWIFTCode>5000</SWIFTCode> 
+<MNOChannels>0089</MNOChannels>                                       
+<PaymentReferenceNumber>22211</PaymentReferenceNumber> 
+<FinalPaymentDate>2022-05-26T21:32:52</FinalPaymentDate> 
+<EndDate>2022-05-26T21:32:52</EndDate> 
+</MessageDetails> 
+</Data> 
+   <Signature>XYZ</Signature> 
+</Document> 
+Deduction repayment notification from FSP to ESS  
+S/N Item Name Item description Type Optional  Payment reference Payment reference number Varchar (8) NO  Payment amount Amount to be paid Number (38,2) NO  Payment 
+description Description as to what payment is being made Varchar (255) YES  Payment date Date of making payment Date NO  Deduction code Loan Deduction 
+Identifier Varchar (8) NO  Loan number Loan Identifier Varchar (8) NO  Application number Loan application identification Varchar (15) NO  Check number Employee Identifier Number (9) NO  Loan Balance Outstanding Loan Amount Number (38,2) NO  
+Message 50 
+<Document> 
+	 	<Data> 
+	 	 	<Header> 
+	 	 	 	<Sender>ZE DONE</Sender> 
+	 	 	 	<Receiver>ESS_UTUMISHI</Receiver> 
+	 	 	 	<FSPCode>1001</FSPCode> 
+	 	 	 	<MsgId>FSP12346</MsgId> 
+<MessageType>FULL_LOAN_REPAYMENT_NOTIFICATION</MessageType> 
+	 	 	</Header> 
+	 	 	<MessageDetails> 
+	 	 	 	<CheckNumber>1230089</CheckNumber> 
+                        <ApplicationNumber>AAA5</ApplicationNumber> 
+                        <LoanNumber>A225</LoanNumber> 
+                        <PaymentReference>77122876112</PaymentReference> 
+                        <DeductionCode>FSC03</DeductionCode> 
+                        <PaymentDescription>description</PaymentDescription> 
+                        <PaymentDate>2022-05-26T21:32:52</PaymentDate> 
+                        <PaymentAmount>10000.55</PaymentAmount> 
+                        <LoanBalance>00.00</LoanBalance> 
+	 	 	</MessageDetails> 
+	 	</Data> 
+	 	<Signature>XYZ</Signature> 
+</Document> 
+B2.  Partial payment 
+i. 	Employee Inquire loan payoff balance  ii. 	Employee select payment intention option (reduce tenure/reduce installment) iii. 	Employee provide available amount for payment 
+iv. 	FSP provides loan balance and payment details (reference number) vii. Employee make payment using reference number v. 	FSP acknowledge payment to employee vi. 	FSP notify the employer about the loan payment vii. Employer update loan details 
+ 
+NB. Employee notify FSP and Employer in case of failure 
+ 
+ 
+ 
+ 
+ 
+ 
+Partial Loan repayment request details  
+S/ N Item Name Item description Type Optional 1 Check number Employee identification Number (9) NO 2 Loan number Loan number Varchar (8) NO 3 FirstName Employee first name Varchar (30) NO 4 Middle Name Employee middle name Varchar (30) NO 5 Last Name Employee last name Varchar (30) NO 6 Vote code Employer identification Varchar (6) NO 7 Vote name Employer name Varchar (255) NO 8 Deduction amount Deduction amount Number (38,2) NO 9 Deduction code Designation Identification Varchar (8) NO 10 Deduction name Designation description Varchar (255) NO 11 Deduction balance Deduction balance Number (38,2) NO 12 FSP code FSP identification Varchar (10) NO 13 Payment option Partial Payment option Varchar (50) NO 14 Intention of partial payment reduce tenure/reduce installment Varchar (50) NO 15 Amount to pay Amount to pay Number (38,2) NO  
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+Message 51 
+<Document> 
+  <Data> 
+ 	<Header> 
+ 	   <Sender>ESS_UTUMISHI</Sender> 
+ <Receiver>FSPSystem</Receiver> 
+ <FSPCode>1001</FSPCode> 
+<MsgId>FSP1234</MsgId> 
+<MessageType>PARTIAL_LOAN_REPAYMENT_REQUEST</MessageType> 
+ 	</Header> 
+            <MessageDetails> 
+                        <LoanNumber>77122876112</LoanNumber> 
+ 	 	 	<CheckNumber>1234444</CheckNumber> 
+ 	 	 	<FirstName>Simba</FirstName> 
+                                  <MiddleName>Mapunda</MiddleName> 
+                                  <LastName>Nguchiro</LastName> 
+ 	 	 	<VoteCode>23</VoteCode> 
+ 	 	 	<VoteName>UTUMISHI</VoteName> 
+ 	 	 	<DeductionAmount>5000000</DeductionAmount> 
+ 	 	 	<DeductionCode>0089</DeductionCode> 
+ 	 	 	<DeductionName>deduction</DeductionName> 
+ 	 	 	<DeductionBalance>20000</DeductionBalance> 
+ 	 	 	<FSPCode>FC001</FSPCode> 
+ 	 	 	<PaymentOption>Partial Payment</PaymentOption> 
+ 	 	 	<Intention>Reduce tenure</Intention> 
+ 	 	 	<AmountToPay>600000</AmountToPay> 
+            </MessageDetails> 
+    </Data>   
+ 	<Signature>XYZ</Signature> 
+</Document> 
+Outstanding balance details for payment (from FSP to ESS) 
+S/N Item Name Item description Type Optional 1 Loan number Loan number Varchar (8) NO 2 Expected Outstanding balance Total amount to pay after payment Number 
+(38,2) NO 3 Payment amount Amount intended to pay Number 
+(38,2) NO 4 FSP code FSP identification Varchar (10) NO 5 Expected End date Loan end date Varchar (8) NO 6 Last deduction date Last payment date Date NO 7 FSP Bank account Account Number Varchar (8) NO 8 FSP Bank account name Account Name Varchar (10) NO 9 SWIFT code Bank SWIFT Code Varchar (10) NO 10 MNO Channels Mobile Number Operator name Varchar (50) YES 11 Payment reference number Payment reference number Varchar (8) NO 12 Final Payment date Last date for payment to be accepted Date NO  
+Message 52 
+<Document> 
+            <Data> 
+               <Header> 
+                            <Sender>ZE DONE</Sender> 
+	 	     <Receiver>ESS_UTUMISHI</Receiver> 
+	 	      <FSPCode>1001</FSPCode> 
+                 <MsgId>FSP12346</MsgId>  
+                 <MessageType> 
+           PARTIAL_REPAYMENT_0FF_BALANCE_RESPONSE 
+             </MessageType> 
+              </Header> 
+                         <MessageDetails> 
+                               <TotalPayOffAmount>1200000</TotalPayOffAmount> 
+                               <LoanNumber>12</LoanNumber> 
+                               <LastDeductionDate>2022-05-26T21:32:52</LastDeductionDate> 
+                               <FSPBankAccount>12356778888</FSPBankAccount> 
+                               <FSPBankAccountName>LOAN</FSPBankAccountName> 
+                               <SWIFTCode>5000</SWIFTCode> 
+                                <MNOChannels>0089</MNOChannels> 
+                            <PaymentReferenceNumber>22211</PaymentReferenceNumber> 
+                               <FinalPaymentDate>2022-05-26T21:32:52</FinalPaymentDate> 
+                               <EndDate>2022-05-26T21:32:52</EndDate> 
+                         </MessageDetails> 
+            </Data> 
+           <Signature>XYZ</Signature> 
+</Document> 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+Deduction repayment notification from FSP to employer 
+S/N Item Name Item description Type Optional 1 Payment reference Reference code for payment made Varchar (10) NO 2 Payment amount Amount paid Number (38,2) NO 3 Payment 
+description Description as to what payment is being made Varchar (10) NO 4 Payment date Date payment made Date NO 5 Deduction code Code for Loan Deduction Varchar (10) NO 6 Loan number Loan Identifier Varchar (10) NO 7 Application number Loan application identification Varchar (15) NO 8 Check number Employee Identifier Number (9) NO 9 Loan Balance Outstanding Loan balance Number (38,2) NO 10 Maturity date New end date Date NO Message 53 
+<Document> 
+	 	<Data> 
+	 	 	<Header> 
+	 	 	 	<Sender>ZE DONE</Sender> 
+	 	 	 	<Receiver>ESS_UTUMISHI</Receiver> 
+	 	 	 	<FSPCode>1001</FSPCode> 
+	 	 	 	<MsgId>FSP12346</MsgId> 
+<MessageType>PARTIAL_LOAN_REPAYMENT_NOTIFICATION</MessageT ype> 
+	 	 	</Header> 
+	 	 	<MessageDetails> 
+	 	 	       <CheckNumber>1230089</CheckNumber> 
+                        <ApplicationNumber>AAA5</ApplicationNumber> 
+                        <LoanNumber>A225</LoanNumber> 
+                        <PaymentReference>77122876112</PaymentReference> 
+                        <DeductionCode>003</DeductionCode> 
+                        <PaymentDescription>description</PaymentDescription> 
+                        <PaymentDate>2022-05-26T21:32:52</PaymentDate> 
+                        <MaturityDate>2022-05-26T21:32:52</MaturityDate> 
+                        <PaymentAmount>10000.55</PaymentAmount> 
+                        <LoanBalance>50000.00</LoanBalance> 
+	 	 	</MessageDetails> 
+	 	</Data> 
+	 	<Signature>XYZ</Signature> 
+</Document> 
+2.6.3 Monthly Deduction record to FSP 
+API to send employee’s monthly deductions to financial service providers on each payroll. 
+S/N Item Name Item description Type Optional 1 Application number ESS Loan application identification Varchar 
+(20) NO 2 Loan Number Unique FSP number that identify loan application Varchar 
+(20) NO 3 Check number Employee identification Number (18) NO 4 First Name Employee First Name Varchar (30) NO 5 Middle Name Employee Middle Name Varchar (30) NO 6 Last Name Employee Last Name Varchar (30) NO 7 National Id National identification number Varchar (22) NO 8 Vote Code Employer identification Varchar (10) NO 9 Vote Name Employer name Varchar (255) NO 10 Department Code Employee department identification Varchar (10) NO 12 Department Name Employee department name Varchar (255) NO 13 Deduction Code Employee Deduction identification Varchar (10) NO 14 Deduction Description Employee Deduction Description Varchar (255) NO 15 Balance Amount Amount left after monthly deduction Number 
+(38,2) NO 16 Deduction Amount Monthly return amount Number 
+(38,2) NO 17 Has Stop Pay Status if employee has stop payment (true or false) Boolean YES 18 Stop Pay Reason Description why employee has stop payment Varchar (255) YES 19 Check Date Payroll date Date NO       
+ 
+  
+ 
+Message 54 
+<Document> 
+  <Data> 
+ 	<Header> 
+ 	 	<Sender>ESS_UTUMISHI</Sender> 
+ 	 	<Receiver>FSPName</Receiver> 
+ 	 	<FSPCode>1001</FSPCode> 
+ 	 	<MsgId>90769af68ef011ecb3a6432feaa9296f</MsgId> 
+ 	 	<MessageType>FSP_MONTHLY_DEDUCTIONS</MessageType> 
+ 	</Header> 
+   <MessageSummary> 
+ 	 	 	<BatchRecordSize>3123407</BatchRecordSize> 	 
+ 	 	 	<BatchNumber>39</BatchNumber> 
+ 	 	 	<TotalBatch>313</TotalBatch> 
+ 	 	 	<PayrollDate>2022-10-31</PayrollDate> 
+   </MessageSummary> 
+   <MessageDetails> 
+   <DeductionRecord> 
+       <ApplicationNumber>ESSAAA5</ApplicationNumber> 
+        <LoanNumber>20070002</LoanNumber> 
+        <CheckNumber>110648922</CheckNumber> 
+        <FirstName>Alima</FirstName> 
+        <LastName>Hamis</LastName> 
+        <MiddleName>Juma</MiddleName> 
+        <NationalId>19000310476100000121</NationalId> 
+        <VoteCode>79E6</VoteCode> 
+        <VoteName>Kilifi District Council</VoteName> 
+        <DepartmentCode>2207</DepartmentCode> 
+        <DepartmentName>PRIMARY   EDUCATION</DepartmentName> 
+        <DeductionCode>FL0001</DeductionCode> 
+        <DeductionDescription>FSP Bank Loan</DeductionDescription > 
+        <BalanceAmount>50000.05</BalanceAmount> 
+        <DeductionAmount>1000.01</DeductionAmount> 
+        <HasStopPay>true</HasStopPay> 
+        <StopPayReason>Death</StopPayReason> 
+        <CheckDate>2022-10-31</CheckDate> 
+      </DeductionRecord> 
+      <DeductionRecord> 
+          <ApplicationNumber>AAA5</ApplicationNumber> 
+           <LoanNumber>20070001</LoanNumber> 
+           <CheckNumber>110648976</CheckNumber> 
+           <FirstName>Miraji</FirstName> 
+           <LastName>Fumbo</LastName> 
+           <MiddleName>Mussa</MiddleName> 
+           <NationalId>19000310476100000121</NationalId> 
+           <VoteCode>79E6</VoteCode> 
+           <VoteName>Kilifi District Council</VoteName> 
+           <DepartmentCode>2207</DepartmentCode> 
+           <DepartmentName>PRIMARY   EDUCATION</DepartmentName>            <DeductionCode>FL0001</DeductionCode> 
+           <DeductionDesption>FSP Bank Loan</DeductionDesption> 
+           <BalanceAmount>50000.05</BalanceAmount> 
+           <DeductionAmount>1000.01</DeductionAmount> 
+           <HasStopPay>false</HasStopPay> 
+           <CheckDate>2022-10-31</CheckDate> 
+         </DeductionRecord> 
+ 	</MessageDetails> 
+     </Data>  
+   <Signature>Signature</Signature> 
+</Document> 
+ 
+2.6.4 Loan Liquidation notification message 
+S/N Item Name Item description Type Optional 1 Application number Loan application identification Varchar (15) NO 2 Loan number Loan Identifier Varchar (20) NO 3 Remarks  Reason why you intend to end deduction Varchar (255) Yes  
+Message 55 
+<Document> 
+  <Data> 
+ 	<Header> 
+ 	 	<Sender>ZE DONE</Sender> 
+ 	 	<Receiver>ESS_UTUMISHI</Receiver> 
+ 	 	<FSPCode>FL8090</FSPCode> 
+ 	 	<MsgId>FSP12346</MsgId>
+ 	<MessageType>LOAN_LIQUIDATION_NOTIFICATION</MessageType> 
+ 	</Header> 
+      <MessageDetails> 
+ 	 	   <ApplicationNumber>ESS1002000</ApplicationNumber> 
+ 	 	   <LoanNumber>A00122</LoanNumber> 
+ 	 	  <Remarks>Loan finalized</Remarks> 
+ 	 	</MessageDetails> 
+    </Data>   
+ 	<Signature>XYZ</Signature> 
+</Document> 
+2.6.5 Loan Status Request 
+FSP Send loan application to get loan status 
+S/N Item Name Item description Type Optional 1 Application number ESS Loan application identification Varchar (15) NO Message 56    <Document> 
+  <Data> 
+ 	<Header> 
+ 	 	<Sender>FSPName</Sender> 
+ 	 	<Receiver>ESS_UTUMISHI </Receiver> 
+ 	 	<FSPCode>1001</FSPCode> 
+ 	 	<MsgId>90769af68ef011ecb3a6432feaa9296f</MsgId> 
+ 	 	<MessageType>LOAN_STATUS_REQUEST</MessageType> 
+ 	</Header> 
+ 	 	<MessageDetails> 
+ 	 	   <ApplicationNumber>ESS17558988000</ApplicationNumber> 
+ 	 	</MessageDetails> 
+ 	</Data> 	 
+ 	<Signature>Signature</Signature> 
+</Document> 
+ 
+2.6.6 Loan Status Response 
+ESS system responds with loan status description 
+S/N Item Name Item description Type Optional 1 Response Code Success or failure code Integer (5) NO 2 Description Success or failure description/message Varchar (255) NO  
+Message 57 
+<Document> 
+  <Data> 
+ 	<Header> 
+ 	 	<Sender>ESS_UTUMISHI</Sender> 
+ 	 	<Receiver>FSPName</Receiver> 
+ 	 	<FSPCode>1001</FSPCode> 
+ 	 	<MsgId>90769af68ef011ecb3a6432feaa9296f</MsgId> 
+ 	 	<MessageType>RESPONSE</MessageType> 
+ 	</Header> 
+ 	 	<MessageDetails> 
+ 	 	   <ResponseCode>8000</ResponseCode> 
+                	  <Description>Loan with application ESS17558988000 is at FSP, last 
+action done at 2022-05-26T21:32:52</Description> 	 
+ 	 	</MessageDetails> 
+ 	</Data> 	 
+ 	<Signature>Signature</Signature> 
+</Document> 
+ 
+ 
+2.7 DEDUCTION STOP NOTIFICATION AND LOAN DEFAULTS RECOVERY 
+Loaned Employee may become defaulters due to different reasons, some being: - 
+a) Termination of Employment due to various causes. 
+b) Disciplinary issues that may lead to Employee Salary being reduced 
+c) Disciplinary Issues that cause Employee Salary to be stopped. 
+a) Employee going on Leave without pay. 
+This process addresses these scenarios by trying to Identify potential defaulters before they become one and notify FSPs beforehand so that proper action(s) can be taken in order to recover the outstanding loan amount. 
+N.B This process require mutual agreement between Employers and FSPs to exchange information before some decisions on Employers side a taken so as to make FSPs be on guard of likely a loanee becoming a defaulter. 
+i. 	Employer provide details to FSP ii. 	FSP reconcile accounts in arrears iii. 	FSP enquire details from employer (on exceptional basis) iv. 	FSP deploys a recovery process. 
+ 
+ 
+2.7.1 Defaulter Details from FSP to Employer  
+S/N Item Name Item description Type Optional 1 Check number Employee identification Number (9) NO 2 Loan number Loan number Varchar (8) NO 3 First Name Employee first name Varchar (30) NO 4 Middle Name Employee middle name Varchar (30) NO 5 Last Name Employee last name Varchar (30) NO 6 Vote code Employer identification Varchar (6) NO 7 Vote name Employer name Varchar (255) NO 8 Installment amount Installment amount Number (38,2) NO 9 Deduction code Designation Identification Varchar (8) NO 10 Deduction name Designation description Varchar (255) NO 11 Outstanding balance Outstanding balance Number (38,2) NO 12 FSP code FSP identification Varchar (10) NO 13 Last pay date Last installment payment date Date NO  
+Message 58 
+<Document> 
+  <Data> 
+ 	<Header> 
+ 	 	<Sender>ZE DONE</Sender> 
+ 	 	<Receiver>ESS_UTUMISHI</Receiver> 
+ 	 	<FSPCode>1001</FSPCode> 
+ 	 	<MsgId>FSP1234</MsgId>
+ 	<MessageType>DEFAULTER_DETAILS_TO_EMPLOYER</MessageType> 
+ 	</Header> 
+            <MessageDetails> 
+                                 <VoteCode>20</VoteCode> 
+ 	 	 	 	<VoteName>Utumishi</VoteName> 
+ 	 	 	 	<CheckNumber>9723101</CheckNumber> 
+ 	 	 	 	<LoanNumber>101</LoanNumber> 
+ 	 	 	 	<FirstName>Simba</FirstName> 
+                                              <MiddleName>Mapunda</MiddleName> 
+                                               <LastName>Nguchiro</LastName> 
+ 	 	 	 	<InstallationAmount>30000</InstallationAmount> 
+ 	 	 	 	<DeductionName> Salary Loan</DeductionName> 
+ 	 	 	 	<DeductionCode>00101</DeductionCode> 
+ 	 	 	 	<OutstandingBalance>3002000</OutstandingBalance> 
+ 	 	 	 	<LastPayDate>2022-05-26T21:32:52</LastPayDate>  
+            </MessageDetails> 
+ 	</Data> 	 	 
+ 	<Signature>XYZ</Signature> 
+</Document> 
+2.7.2 Defaulter details from employer to FSP 
+S/N Item Name Item description Type Optional 1 Check number Employee identification Number (9) NO 2 Loan number Loan number Varchar (8) NO 3 FSP code FSP identification Varchar (10) NO 4 Last pay date Last installment payment date Date NO 5 Employee 
+Status Status of Employee (Active/Inactive) Varchar (8) NO 6 Workstation Employee Station of Duty Varchar (50) YES 7 Physical address Physical address Varchar (255) YES 8 Telephone number Telephone number Varchar (12) YES 9 Email address Email address Varchar (50) NO 10 Mobile number Mobile number Varchar (12) NO 11 Contact person Loan officer Varchar (90) NO 12 Institution Institution name Varchar (255) NO Message 59 
+   <Document> 
+  <Data> 
+ 	<Header> 
+ 	 	<Sender>ESS_UTUMISHI</Sender> 
+ 	 	<Receiver>FSPSystem</Receiver> 
+ 	 	<FSPCode>1001</FSPCode> 
+ 	 	<MsgId>90769af68ef011ecb3a6432feaa9296f</MsgId> 
+ 	 	<MessageType>DEFAULTER_DETAILS_TO_FSP</MessageType> 
+ 	</Header> 
+ 	 	<MessageDetails> 
+ 	 	 	<CheckNumber>111276112</CheckNumber> 
+ 	 	 	<LoanNumber>101</LoanNumber> 
+ 	 	 	<FSPCode>01011</FSPCode> 
+ 	 	 	<LastPaymentDate>2022-05-26T21:32:52</LastPaymentDate> 
+ 	 	 	<EmploymentStatus>FT</EmploymentStatus> 
+ 	 	 	<WorkStation>Nanjilinji</WorkStation> 
+ 	 	 	<PhysicalAddress>Box 201</PhysicalAddress> 
+ 	 	 	<TelephoneNumber>+2552233001</TelephoneNumber> 
+ 	 	 	<EmailAddress>john.pesa@watumishi.go.tz</EmailAddress> 
+ 	 	 	<Fax>22330012</Fax> 
+ 	 	 	<MobileNumber>0709712312</MobileNumber> 
+ 	 	 	<ContactPerson>Loan Officer Name</ContactPerson> 
+ 	 	 	 
+ 	 	</MessageDetails> 
+ 	</Data> 	 
+ 	<Signature>Signature</Signature> 
+</Document> 
+2.7.3 Deduction Stop Notification to FSP 
+API to send notification to financial service provider when an employer stops employee deduction or employment status change to inactive. 
+S/N Item Name Item description Type Optional 1 Application 
+Number Unique ESS number 
+that identify loan application Varchar (20) NO 2 Loan Number Unique FSP     number that identify loan application Varchar (20) NO 3 Check number Employee identification Number (18) NO 4 Deduction Code Employee Deduction 
+identification Varchar (10) NO 5 Deduction Description Employee Deduction Description Varchar (255) NO 6 Balance Amount Amount left after deduction Number (38,2) NO 7 Deduction Amount Monthly return amount Number (38,2) NO 8 Stop Reason Description why employer has stop deduction Varchar (255) Yes 9 Stop Date Deduction stop date Date YES  
+Message 60 
+<Document> 
+ 	<Data> 
+ 	 	<Header> 
+ 	 	 	<Sender>ESS_UTUMISHI</Sender> 
+ 	 	 	<Receiver>FSPSystem</Receiver> 
+ 	 	 	<FSPCode>FL8090</FSPCode> 
+ 	 	 	<MsgId>FSP12346</MsgId> 
+ 	<MessageType>DEDUCTION_STOP_NOTIFICATION</MessageType> 
+ 	 	</Header> 
+ 	 	<MessageDetails> 
+                              <CheckNumber>112121100</CheckNumber> 
+ 	 	 	<ApplicationNumber>ESS11223344566</ApplicationNumber> 
+ 	 	 	<LoanNumber>LN009999</LoanNumber> 
+ 	 	 	<DeductionCode>FL7076</DeductionCode> 
+ 	 	 	<DeductionDescription>JJ and Son</DeductionDescription> 
+ 	 	 	<StopReason>Reasons</StopReason> 
+ 	 	 	<StopDate>2025-06-26T21:32:52</StopDate> 
+ 	 	 	<BalanceAmount>5000.67</BalanceAmount> 
+ 	 	 	<DeductionAmount>800.80</DeductionAmount> 
+ 	 	</MessageDetails> 
+ 	 	<MessageDetails> 
+ 	 	 	<CheckNumber>13212772</CheckNumber> 
+ 	 	 	<ApplicationNumber>ESS11223344566</ApplicationNumber> 
+ 	 	 	<LoanNumber>LN009999</LoanNumber> 
+ 	 	 	<DeductionCode>FL7076</DeductionCode> 
+ 	 	 	<DeductionDescription>JJ and Son</DeductionDescription> 
+ 	 	 	<StopReason>Reasons</StopReason> 
+ 	 	 	<StopDate>2025-06-26T21:32:52</StopDate> 
+ 	 	 	<BalanceAmount>5000.67</BalanceAmount> 
+ 	 	 	<DeductionAmount>500.09</DeductionAmount> 
+ 	 	</MessageDetails> </Data> 
+ 	<Signature>XYZ</Signature> 
+</Document> 
+ 
+2.8 ACCOUNT VALIDATION, FSP BRANCHES AND GENERAL RESPONSE 
+This end point is for validating employee accounts with both account number and account name.  
+2.8.1 Account validation Request to FSP 
+S/N Item Name Item description Type Optional 1 Account Number Employee account number Varchar (30) NO 2 FirstName Employee first name Varchar (30) NO 3 Middle Name Employee middle name Varchar (30) NO 4 Last Name Employee last name Varchar (30) NO Message 61    <Document> 
+  <Data> 
+ 	<Header> 
+ 	 	<Sender>ESS_UTUMISHI</Sender> 
+ 	 	<Receiver>FSPSystem</Receiver> 
+ 	 	<FSPCode>1001A</FSPCode> 
+ 	 	<MsgId>90769af68ef011ecb3a6432feaa9296f</MsgId> 
+ 	 	<MessageType>ACCOUNT_VALIDATION</MessageType> 
+ 	</Header> 
+ 	 	<MessageDetails> 
+ 	 	    <AccountNumber>010101414</AccountNumber> 
+                	    <FirstName>Simba</FirstName> 
+                            <MiddleName>Mapunda</MiddleName> 
+                            <LastName>Nguchiro</LastName>  
+ 	 	</MessageDetails> 
+ 	</Data> 	 
+ 	<Signature>Signature</Signature> 
+</Document> 
+ 
+2.8.2 Account validation Response from FSP 
+S/N Item Name Item description Type Optional 1 Valid Account validity or status Boolean NO 2 Reason  Reason if not valid Varchar (100) Yes  
+Message 62 
+   <Document> 
+  <Data> 
+ 	<Header> 
+ 	 	<Sender> FSPSystem</Sender> 
+ 	 	<Receiver>ESS_UTUMISHI</Receiver> 
+ 	 	<FSPCode>007</FSPCode> 
+ 	 	<MsgId>90769af68ef011ecb3a6432feaa9296f</MsgId> 
+ 	<MessageType>ACCOUNT_VALIDATION_RESPONSE</MessageType> 
+ 	</Header> 
+ 	 	<MessageDetails> 
+ 	 	    <Valid> true || false </Valid> 
+                	    <Reason>Account number blocked</Reason> 	 
+ 	        </MessageDetails> 
+ 	</Data> 	 
+ 	<Signature>Signature</Signature> 
+</Document> 
+ 
+2.8.3 FSP branches 
+The purpose of this API is to get all FSP service branch information to allow employee to select nearest branch for help. 
+S/ N Item Name Item description Type Optional 1 District Code District identification code Varchar (100) NO 2 Branch Code FSP branch 
+identification code Varchar (100) NO 3 Branch Name FSP branch name Varchar ((255) NO  
+Message 63 
+  <Document> 
+  <Data> 
+ 	<Header> 
+ 	 	<Sender> FSPSystem</Sender> 
+ 	 	<Receiver>ESS_UTUMISHI</Receiver> 
+ 	 	<FSPCode>1001A</FSPCode> 
+ 	 	<MsgId>90769af68ef011ecb3a6432feaa9296f</MsgId> 
+ 	 	<MessageType>FSP_BRANCHES</MessageType> 
+ 	</Header> 
+ 	<MessageDetails> 
+ 	 	<BranchDetail> 
+ 	 	 	<DistrictCode>D001</DistrictCode> 
+ 	 	 	<Branch> 
+ 	 	 	 	<BranchCode>D001001</BranchCode> 
+ 	 	 	 	<BranchName>Hai1</BranchName> 
+ 	 	 	</Branch> 
+ 	 	 	<Branch> 
+ 	 	 	 	<BranchCode>D001002</BranchCode> 
+ 	 	 	 	<BranchName>Hai2</BranchName> 
+ 	 	 	</Branch> 
+ 	 	 	<Branch> 
+ 	 	 	 	<BranchCode>D001003</BranchCode> 
+ 	 	 	 	<BranchName>Hai3</BranchName> 
+ 	 	 	</Branch> 
+ 	 	</BranchDetail> 
+ 	 	<BranchDetail> 
+ 	 	 	<DistrictCode>D002</DistrictCode> 
+ 	 	 	<Branch> 
+ 	 	 	 	<BranchCode>D002001</BranchCode> 
+ 	 	 	 	<BranchName>Posta1</BranchName> 
+ 	 	 	</Branch> 
+ 	 	 	<Branch> 
+ 	 	 	 	<BranchCode>D002002</BranchCode> 
+ 	 	 	 	<BranchName>Posta2</BranchName> 
+ 	 	 	</Branch> 
+ 	 	 	<Branch> 
+ 	 	 	 	<BranchCode>D002001</BranchCode> 
+ 	 	 	 	<BranchName>Posta3</BranchName> 
+ 	 	 	</Branch> 
+ 	 	</BranchDetail> 
+ 	 	<BranchDetail> 
+ 	 	 	<DistrictCode>D003</DistrictCode> 
+ 	 	 	<Branch> 
+ 	 	 	 	<BranchCode>D003001</BranchCode> 
+ 	 	 	 	<BranchName>Mlimani1</BranchName> 
+ 	 	 	</Branch> 
+ 	 	 	<Branch> 
+ 	 	 	 	<BranchCode>D003002</BranchCode> 
+ 	 	 	 	<BranchName>Mlimani1</BranchName> 
+ 	 	 	</Branch> 
+ 	 	 	<Branch> 
+ 	 	 	 	<BranchCode>D003003</BranchCode> 
+ 	 	 	 	<BranchName>Mlimani1</BranchName> 
+ 	 	 	</Branch> 
+ 	 	</BranchDetail> 
+ 	</MessageDetails> 
+ 	</Data> 	 
+ 	<Signature>Signature</Signature> 
+</Document> 
+ 
+2.8.4 General Response Message 
+S/N Item Name Item description Type Optional 1 Response Code Success or failure code Integer (5) NO 2 Description Success or failure description/message Varchar (255) NO Message 64 
+<Document> 
+  <Data> 
+ 	<Header> 
+ 	 	<Sender>ESS_UTUMISHI</Sender> 
+ 	 	<Receiver>FSPName</Receiver> 
+ 	 	<FSPCode>1001</FSPCode> 
+ 	 	<MsgId>90769af68ef011ecb3a6432feaa9296f</MsgId> 
+ 	 	<MessageType>RESPONSE</MessageType> 
+ 	</Header> 
+ 	 	<MessageDetails> 
+ 	 	   <ResponseCode>8000</ResponseCode> 
+                	  <Description>Success</Description>  
+ 	 	</MessageDetails> 
+ 	</Data> 	 
+ 	<Signature>Signature</Signature> 
+</Document> 	 
+3 DIGITAL SIGNATURE SECURITY  
+3.1 Overview 
+ 	Digital signature will be used for messages exchange between the ESS and 
+Financial Service Provider. The FSP will be required to apply for digital signature from Certificate Authority (CA). The exchange of messages will also be done using digital signatures. Prior to being confirmed(verified) using the participant's public key, the message(s) must be signed with the participant's private key. 
+3.2 Digital Signature 
+ 	The security architecture used by the ESS is based on Public Key Infrastructure (PKI) technology in which two keys (Public and Private) are used to provide the highest levels of security and universal acceptance. There are typically three algorithms involved with the digital signature process: 
+I.Key generation - This algorithm provides a private key along with its   corresponding public key from CA. 
+I.Signing - This algorithm produces a signature upon receiving a private key and the message that is being signed. 
+I. Verification - This algorithm checks for the authenticity of the message by verifying it along with the signature and the public key. 
+3.3 Digital Signature File Format 
+ 	ESS accepts and shares public key certificate in .cer or .crt format. The expected filename extension fspNameCertificate.cer or fspNameCertificate.crt 
+3.4 Signature Algorithm 
+The supported signature algorithm is SHA256withRSA with base64 string encoded of character length 344. 
+3.5 Signed Final Payload Format 
+ 	ESS expects message to be digitally signed and obey the following rules: - Sample content to be signed: 
+         <Data> 
+ 	<Header> 
+ 	 	<Sender>ESS_UTUMISHI</Sender> 
+ 	 	<Receiver>FSPName</Receiver> 
+ 	 	<FSPCode>1001</FSPCode> 
+ 	 	<MsgId>90769af68ef011ecb3a6432feaa9296f</MsgId> 
+ 	 	<MessageType>RESPONSE</MessageType> 
+ 	</Header> 
+ 	 	<MessageDetails> 
+ 	 	   <ResponseCode>8000</ResponseCode> 
+                	  <Description>Success</Description>  
+ 	 	</MessageDetails> 
+ 	</Data> 	 
+Final payload after signing: 
+  	 	<Document> 
+  	 	   <Data> 
+ 	                    <Header> 
+ 	 	  	<Sender>ESS_UTUMISHI</Sender> 
+ 	 	 	<Receiver>FSPName</Receiver> 
+ 	 	 	<FSPCode>1001</FSPCode>  	 	 	<MsgId>90769af68ef011ecb3a6432feaa9296f</MsgId> 
+ 	 	 	<MessageType>RESPONSE</MessageType> 
+ 	 	 </Header> 
+ 	 	 	<MessageDetails> 
+ 	 	    	 	<ResponseCode>8000</ResponseCode> 
+                	   	 	<Description>Success</Description> 	 
+ 	 	 	</MessageDetails> 
+ 	 	</Data> 
+                  <Signature> 
+XiMiKOSrePDw4w05uyvX/ro0XpgEqQ5bXgHF6g9tgYSFwsX3vj+Fy44rDg
+FCU3W3Dc0O62CbTMHz5Kc1vIxHHGFvDknuFqUqL5zNapQEq2DAnoTl
+ONGRmyBhfJZ9y2NqvoKfAnrqgwasDEfC79QR0WH8p2sfPCd0wOVyv5J KIE2QqxF4et6nBO2kmzTPmc35ytTGPltn1Zl7nmaJ6au5in8X8qhFrqqW+7 mLe6LmA8ASgWvUZ9JXhKUfic8k8kJYRyEUNEPj0cbKsjtHzqOENfYlHKV gwBARBJnqF9Dbyet52ZqRq13QWi7F8UbTtvNvXZLMbnlMWOr+cH6og== 
+                    </Signature> 
+             </Document> 
+   
+4 APPENDICES 
+4.1 Loan states 
+State Description Action owner Initiated Created but not submitted Employee Loan offer at FSP Loan submitted to FSP by employee FSP FSP Rejected Loan closed Not Applicable Loan Offer at employee FSP respond with loan offer Employee Employee Rejected Loan Closed by FSP  Pending for approval Employee accept offer and submit to employer Employer Employee canceled Loan request canceled by 
+Employee 
+(precondition=pending for 
+Approval) Employee Employer Rejected Loan Closed by Employer Employer Submitted for disbursement Loan Approved waiting money disbursement into Employee Account FSP FSP Canceled Loan request canceled by FSP FSP Completed Loan Completed FSP Waiting for liquidation Loan Waiting to be liquidated FSP Disbursement Failure Loan disbursement Failure FSP 4.2 Loan state transition 
+       New Loan 
+Initiated -> Loan offer At FSP -> FSP Rejected| Loan Offer at employee -> Employee Rejected| Pending for approval -> Employee canceled| Employer Rejected| Submitted for disbursement -> FSP Canceled| Completed 
+Loan Take over 
+Initiated -> Loan offer At FSP -> FSP Rejected| Loan Offer at employee -> Employee Rejected| Pending for approval -> Employee canceled| Employer Rejected -> Waiting for liquidation -> Submitted for disbursement ->FSP Canceled | Completed 
+4.3 Response Code 
+No Code Description  8000 Successful/Received  8001 Required header is not given  8002 Unauthorized  8003 Invalid Financial service provider code  8004 Service provider is not active  8005 General Failure  8006 Duplicate Request/ Already received  8007  Invalid bank account  8008  Bank account not active  8009 Invalid Signature  8010 Invalid Signature Configuration missing one of parameter passphrase, key alias, filename)  8011  Error on processing request  8012 Request cannot be completed at this time, try later  8013 Inactive communication protocol  8014 Invalid code, mismatch of supplied code on information and header  8015 Invalid deduction code  8016 Check Number does not exist  8017 Vote code does not exist  8018 Invalid product code  8019 Invalid Application number  8020 Payment reference number does not exist  
+ 
+ 
+
+
+
+
+
+
+I 
+
+III 
+
+I 
+
+1 
+
+1 
+
+1 
+
+1 
+
+1 
+
+ 
+31 
+
+1 
+
+1 
+
+1 
+
