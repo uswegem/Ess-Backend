@@ -6,7 +6,8 @@ const { sendCallback } = require('../../utils/callbackUtils');
 const { getMessageId } = require('../../utils/messageIdGenerator');
 const LOAN_CONSTANTS = require('../../utils/loanConstants');
 const LoanCalculations = require('../../utils/loanCalculations');
-const { generateLoanNumber, generateFSPReferenceNumber } = require('../../utils/loanUtils');
+const loanUtils = require('../../utils/loanUtils');
+const { generateLoanNumber, generateFSPReferenceNumber } = loanUtils;
 const LoanMappingService = require('../../services/loanMappingService');
 const cbsApi = require('../../services/cbs.api');
 
@@ -153,20 +154,55 @@ async function handleTopUpOfferRequestAuto(parsedData, res, clientData, loanData
         setTimeout(async () => {
             try {
                 logger.info('⏰ Sending LOAN_INITIAL_APPROVAL_NOTIFICATION for auto-detected top-up...');
-                
+
+                // Tenant-scoped product lookup - source of the calculation rates. No
+                // LOAN_CONSTANTS fallback. The ACK for this message was already sent
+                // synchronously before this setTimeout ran (structurally, there is no ESS
+                // reply channel left to use), so a missing/inactive product here is recorded
+                // as LoanMapping.status='FAILED' with an explicit reason instead - never a
+                // silently-substituted default, and never a callback that promises an offer
+                // that was never actually calculated from a real product.
+                let productRates;
+                try {
+                    productRates = await loanUtils.resolveProductForCalculation(messageDetails.ProductCode);
+                } catch (productError) {
+                    logger.error(`❌ Product resolution failed for auto-detected top-up: ${productError.message}`);
+                    try {
+                        await LoanMappingService.createInitialMapping(
+                            messageDetails.ApplicationNumber,
+                            messageDetails.CheckNumber,
+                            generateFSPReferenceNumber(),
+                            {
+                                productCode: "TOPUP",
+                                requestedAmount: parseFloat(messageDetails.RequestedAmount) || 0,
+                                tenure: parseInt(messageDetails.Tenure) || 0,
+                                status: 'FAILED',
+                                metadata: {
+                                    failureReason: productError.message,
+                                    failedAt: new Date().toISOString()
+                                },
+                                mifosClientId: activeLoanInfo.customer.id,
+                                existingLoanId: activeLoanInfo.activeLoan.id
+                            }
+                        );
+                    } catch (mappingError) {
+                        logger.error('❌ Error recording FAILED mapping for auto top-up product resolution failure:', mappingError);
+                    }
+                    return; // Do not send an approval callback for an offer that was never calculated
+                }
+                const { interestRate, processingFeeRate, insuranceRate, otherCharges: otherChargesAmount, maxTenure } = productRates;
+
                 // Calculate loan offer with proper tenure defaulting
                 let offerTenure = parseInt(messageDetails.Tenure);
                 if (!offerTenure || offerTenure === 0) {
-                    offerTenure = LOAN_CONSTANTS.MAX_TENURE;
-                    logger.info(`Tenure not provided, defaulting to maximum: ${offerTenure} months`);
+                    offerTenure = maxTenure;
+                    logger.info(`Tenure not provided, defaulting to product's max tenure: ${offerTenure} months`);
                 }
-                
+
                 // Determine loan amount
                 let requestedAmount = parseFloat(messageDetails.RequestedAmount) || 0;
                 const maxAffordableEMI = parseFloat(messageDetails.DesiredDeductibleAmount || messageDetails.DeductibleAmount || messageDetails.OneThirdAmount || 0);
-                
-                const interestRate = LOAN_CONSTANTS.DEFAULT_INTEREST_RATE;
-                
+
                 // Calculate or adjust loan amount based on affordability
                 if (requestedAmount > 0 && maxAffordableEMI > 0) {
                     const calculatedEMI = await LoanCalculations.calculateEMI(requestedAmount, interestRate, offerTenure);
@@ -182,15 +218,15 @@ async function handleTopUpOfferRequestAuto(parsedData, res, clientData, loanData
                 } else {
                     requestedAmount = Math.max(requestedAmount, LOAN_CONSTANTS.MIN_LOAN_AMOUNT);
                 }
-                
+
                 const loanAmount = requestedAmount;
                 const totalInterestRateAmount = await LoanCalculations.calculateTotalInterest(loanAmount, interestRate, offerTenure);
-                const charges = LoanCalculations.calculateCharges(loanAmount);
+                const charges = LoanCalculations.calculateCharges(loanAmount, processingFeeRate, insuranceRate, otherChargesAmount);
                 const totalAmountToPay = loanAmount + totalInterestRateAmount;
                 const otherCharges = charges.otherCharges;
                 const loanNumber = generateLoanNumber();
                 const fspReferenceNumber = generateFSPReferenceNumber();
-                
+
                 // Update loan mapping with approval details
                 try {
                     await LoanMappingService.createInitialMapping(
@@ -207,14 +243,20 @@ async function handleTopUpOfferRequestAuto(parsedData, res, clientData, loanData
                             otherCharges: otherCharges,
                             status: 'INITIAL_APPROVAL_SENT',
                             mifosClientId: activeLoanInfo.customer.id,
-                            existingLoanId: activeLoanInfo.activeLoan.id
+                            existingLoanId: activeLoanInfo.activeLoan.id,
+                            quotedMifosProductId: productRates.product.mifosProductId,
+                            quotedInterestRate: interestRate,
+                            quotedProcessingFee: productRates.product.processingFee,
+                            quotedInsurance: productRates.product.insurance,
+                            quotedOtherCharges: productRates.product.otherCharges,
+                            quotedAt: new Date()
                         }
                     );
                     logger.info('✅ Created loan mapping for auto-detected top-up');
                 } catch (mappingError) {
                     logger.error('❌ Error creating loan mapping for auto top-up:', mappingError);
                 }
-                
+
                 const approvalResponseData = {
                     Data: {
                         Header: {
@@ -380,11 +422,18 @@ const handleLoanOfferRequest = async (parsedData, res) => {
 
         logger.info('✅ No active loan found - processing as regular LOAN_OFFER_REQUEST');
 
+        // Tenant-scoped product lookup - source of the calculation rates. No LOAN_CONSTANTS
+        // fallback. This runs before the ACK is sent below, so a missing/inactive product
+        // can still be reported synchronously via the existing catch block/8012-style error
+        // response (using the ApplicationException's own errorCode).
+        const { product: matchedProduct, interestRate, processingFeeRate, insuranceRate, otherCharges: otherChargesAmount, maxTenure } =
+            await loanUtils.resolveProductForCalculation(messageDetails.ProductCode);
+
         // Calculate loan offer immediately with proper tenure defaulting
         let offerTenure = parseInt(messageDetails.Tenure);
         if (!offerTenure || offerTenure === 0) {
-            offerTenure = LOAN_CONSTANTS.MAX_TENURE;
-            logger.info(`Tenure not provided or is 0, defaulting to maximum tenure: ${offerTenure} months`);
+            offerTenure = maxTenure;
+            logger.info(`Tenure not provided or is 0, defaulting to product's max tenure: ${offerTenure} months`);
         }
 
         // Determine maximum affordable EMI from available data
@@ -415,9 +464,6 @@ const handleLoanOfferRequest = async (parsedData, res) => {
 
         let requestedAmount = messageDetails.RequestedAmount || 0;
 
-        // Use consistent interest rate from constants
-        const interestRate = LOAN_CONSTANTS.DEFAULT_INTEREST_RATE;
-        
         // If requested amount is provided, validate it doesn't exceed affordability
         if (requestedAmount > 0 && maxAffordableEMI > 0) {
             const calculatedEMI = await LoanCalculations.calculateEMI(requestedAmount, interestRate, offerTenure);
@@ -461,7 +507,7 @@ const handleLoanOfferRequest = async (parsedData, res) => {
 
         // Use same calculation logic as LOAN_CHARGES_REQUEST
         const totalInterestRateAmount = await LoanCalculations.calculateTotalInterest(loanAmount, offerInterestRate, tenure);
-        const charges = LoanCalculations.calculateCharges(loanAmount);
+        const charges = LoanCalculations.calculateCharges(loanAmount, processingFeeRate, insuranceRate, otherChargesAmount);
         const totalProcessingFees = charges.processingFee;
         const totalInsurance = charges.insurance;
         const otherCharges = charges.otherCharges;
@@ -603,7 +649,9 @@ const handleLoanOfferRequest = async (parsedData, res) => {
 
     } catch (error) {
         logger.error('Error processing loan offer request:', error);
-        return sendErrorResponse(res, '8012', error.message, 'xml', parsedData);
+        // ApplicationException (e.g. resolveProductForCalculation's "no matching product")
+        // carries its own specific errorCode - use it instead of the generic 8012.
+        return sendErrorResponse(res, error.errorCode || '8012', error.message, 'xml', parsedData);
     }
 };
 

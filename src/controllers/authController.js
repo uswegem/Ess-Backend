@@ -4,7 +4,9 @@ const Tenant = require('../models/Tenant');
 const TenantUser = require('../models/TenantUser');
 const ApiKey = require('../models/ApiKey');
 const RefreshToken = require('../models/RefreshToken');
+const PasswordResetToken = require('../models/PasswordResetToken');
 const JWTUtils = require('../utils/jwtUtils');
+const { sendMail } = require('../utils/mailer');
 const logger = require('../utils/logger');
 const {
   buildTenantContext,
@@ -529,6 +531,132 @@ class AuthController {
       res.status(500).json({
         success: false,
         message: 'Internal server error.'
+      });
+    }
+  }
+
+  // Always the same wording regardless of whether the email matched a real account - never
+  // reveal which emails are registered (account enumeration).
+  static FORGOT_PASSWORD_GENERIC_MESSAGE = 'If an account exists for this email, a password reset link has been sent.';
+
+  static async forgotPassword(req, res) {
+    try {
+      const { email } = req.body;
+      if (!email) {
+        return res.status(400).json({
+          success: false,
+          message: 'Email is required.'
+        });
+      }
+
+      // Identity is global (User is not tenant-scoped - see TenantUser join table), same as
+      // login's own lookup, so this is a single global lookup, not a per-tenant one.
+      const user = await User.findOne({ email: String(email).toLowerCase().trim() });
+
+      if (user && user.isActive) {
+        // Per-account throttle (in addition to the route's per-IP rate limiter): skip minting
+        // another token if this account already has several recent requests, but still return
+        // the same generic response either way so this can't be used to probe account existence.
+        const recentCount = await PasswordResetToken.countRecentForUser(user._id, 15 * 60 * 1000);
+        if (recentCount < 3) {
+          const expiresAt = new Date(Date.now() + 20 * 60 * 1000); // 20 minutes
+          const { rawToken } = await PasswordResetToken.createForUser({
+            userId: user._id,
+            expiresAt,
+            requestedIp: req.ip
+          });
+
+          const resetUrl = `${process.env.PASSWORD_RESET_URL}?token=${rawToken}`;
+          const mailResult = await sendMail({
+            to: user.email,
+            subject: 'Reset your password',
+            text: `We received a request to reset your password. This link expires in 20 minutes and can only be used once:\n\n${resetUrl}\n\nIf you didn't request this, you can ignore this email.`,
+            html: `<p>We received a request to reset your password. This link expires in 20 minutes and can only be used once:</p><p><a href="${resetUrl}">${resetUrl}</a></p><p>If you didn't request this, you can ignore this email.</p>`
+          });
+
+          await AuditLog.create({
+            action: 'forgot_password_request',
+            description: `Password reset requested for user: ${user.username}`,
+            userId: user._id,
+            correlationId: req.correlationId,
+            userAgent: req.get('User-Agent'),
+            ipAddress: req.ip,
+            status: mailResult.sent ? 'success' : 'failed',
+            metadata: { emailSent: mailResult.sent }
+          });
+        } else {
+          logger.warn(`Forgot-password throttled for user ${user.username} - too many recent requests`);
+        }
+      }
+
+      // Same response whether or not a user was found/throttled/email-send succeeded.
+      return res.json({
+        success: true,
+        message: AuthController.FORGOT_PASSWORD_GENERIC_MESSAGE
+      });
+    } catch (error) {
+      logger.error('Forgot password error:', { error: error.message, stack: error.stack });
+      // Still generic - an internal error here must not leak account existence either.
+      return res.json({
+        success: true,
+        message: AuthController.FORGOT_PASSWORD_GENERIC_MESSAGE
+      });
+    }
+  }
+
+  static async resetPassword(req, res) {
+    try {
+      const { token, newPassword } = req.body;
+      if (!token || !newPassword) {
+        return res.status(400).json({
+          success: false,
+          message: 'Token and newPassword are required.'
+        });
+      }
+
+      const resetToken = await PasswordResetToken.findByRawToken(token);
+      if (!resetToken || !resetToken.isUsable()) {
+        return res.status(400).json({
+          success: false,
+          message: 'This reset link is invalid or has expired. Please request a new one.'
+        });
+      }
+
+      const user = await User.findById(resetToken.userId);
+      if (!user || !user.isActive) {
+        return res.status(400).json({
+          success: false,
+          message: 'This reset link is invalid or has expired. Please request a new one.'
+        });
+      }
+
+      user.password = newPassword; // rehashed by User's pre-save hook, same as changePassword
+      await user.save();
+
+      await resetToken.markUsed();
+
+      // Compromised-account defense: a password reset should not leave old sessions valid.
+      await RefreshToken.revokeAllForUser(user._id);
+
+      await AuditLog.create({
+        action: 'password_reset',
+        description: `Password reset completed for user: ${user.username}`,
+        userId: user._id,
+        correlationId: req.correlationId,
+        userAgent: req.get('User-Agent'),
+        ipAddress: req.ip,
+        status: 'success'
+      });
+
+      return res.json({
+        success: true,
+        message: 'Password has been reset. Please log in with your new password.'
+      });
+    } catch (error) {
+      logger.error('Reset password error:', { error: error.message, stack: error.stack });
+      return res.status(500).json({
+        success: false,
+        message: 'Internal server error during password reset.'
       });
     }
   }

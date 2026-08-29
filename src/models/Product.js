@@ -74,6 +74,17 @@ const productSchema = new mongoose.Schema({
     default: 0
   },
 
+  // Fixed other charges (legal fees, etc.) used by the loan-charges calculation flow
+  // (loanChargesHandler.js and friends). ess2-internal only - there is no corresponding
+  // Utumishi PRODUCT_DETAIL field, so this is deliberately NOT in PRODUCT_DETAIL_FIELDS
+  // below and never goes out over the wire. Default matches the previous global
+  // LOAN_CONSTANTS.OTHER_CHARGES value so existing products behave the same until an
+  // operator edits this per product.
+  otherCharges: {
+    type: Number,
+    default: 50000
+  },
+
   // Amount limits
   minAmount: {
     type: Number

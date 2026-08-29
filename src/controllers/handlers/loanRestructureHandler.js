@@ -172,7 +172,7 @@ const handleLoanRestructureRequest = async (parsedData, res) => {
                     newTenure: tenure,
                     existingLoanAmount: existingLoanAmount,
                     currentOutstanding: currentOutstanding,
-                    newTotalAmountToPay: totalAmountToPay,
+                    totalAmountToPay: totalAmountToPay,
                     newInterestRate: interestRate,
                     newOtherCharges: otherCharges,
                     newLoanNumber: newLoanNumber,

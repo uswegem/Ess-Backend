@@ -2,6 +2,8 @@ const logger = require('./logger');
 
 const { format } = require('date-fns');
 const LOAN_CONSTANTS = require('./loanConstants');
+const Product = require('../models/Product');
+const { getActiveTenantContext } = require('./tenantContext');
 
 // Improved date handling with fallback
 const { differenceInMonths, parseISO } = (() => {
@@ -106,6 +108,47 @@ class ApplicationException extends Error {
 }
 
 /**
+ * Resolve the tenant-scoped Product record that should drive a loan
+ * calculation, and derive calculation-ready values from it.
+ *
+ * No fallback to LOAN_CONSTANTS or any other global default - a missing/
+ * inactive product is a hard failure now (ApplicationException with
+ * LOAN_CONSTANTS.ERROR_CODES.INVALID_PRODUCT). Callers must not catch this
+ * and substitute a hardcoded value; see each handler's own fail-clear
+ * treatment (synchronous error response where a response hasn't been sent
+ * yet, LoanMapping.status='FAILED' where it has).
+ *
+ * @param {string} productCode
+ * @returns {Promise<{product: object, interestRate: number, processingFeeRate: number, insuranceRate: number, otherCharges: number, maxTenure: number}>}
+ */
+async function resolveProductForCalculation(productCode) {
+  const code = productCode || '17';
+  const tenantId = getActiveTenantContext()?.tenantId || null;
+  const query = { productCode: code, isActive: true };
+  if (tenantId) query.tenantId = tenantId;
+
+  const product = await Product.findOne(query).lean();
+  if (!product) {
+    throw new ApplicationException(
+      LOAN_CONSTANTS.ERROR_CODES.INVALID_PRODUCT,
+      `No matching active Product found for productCode=${code}, tenantId=${tenantId}`
+    );
+  }
+
+  return {
+    product,
+    interestRate: product.interestRate,
+    // Product stores percent-numbers (e.g. 2.00 => 2%); calculation functions
+    // (calculateCharges et al.) expect fractions (e.g. 0.02) - convert once,
+    // here, so every caller gets a fraction consistently.
+    processingFeeRate: (product.processingFee || 0) / 100,
+    insuranceRate: (product.insurance || 0) / 100,
+    otherCharges: product.otherCharges,
+    maxTenure: product.maxTenure || LOAN_CONSTANTS.MAX_TENURE
+  };
+}
+
+/**
  * Generate a unique loan number
  * @returns {string} Generated loan number
  */
@@ -133,5 +176,6 @@ module.exports = {
   ApplicationException,
   generateLoanNumber,
   generateFSPReferenceNumber,
+  resolveProductForCalculation,
   LOAN_CONSTANTS
 };

@@ -52,6 +52,50 @@ function extractApplicationNumber(messageDetails) {
 }
 
 /**
+ * Parses MessageDetails (an XML fragment string, or already an object) and runs the same
+ * required-field validation sendOutgoingMessage() itself uses, without any of the
+ * tenant-scope lookup, signing, logging, or sending that follows it there. Used by both
+ * sendOutgoingMessage() below (unchanged behavior) and the standalone validate-only
+ * endpoint (outgoingMessagesController.validateOutgoingMessage) - a genuine pre-submit
+ * check that must not create a MessageLog entry or touch the signing key.
+ *
+ * @throws Error (statusCode 400) on malformed XML or a failed field validation. The thrown
+ *   Error carries `.errors` (array of individual field messages) when it's a validation
+ *   failure specifically, so callers can report each missing field separately.
+ */
+async function validateMessageDetailsXml(MessageType, MessageDetails) {
+  if (!MessageType || !MessageDetails) {
+    const err = new Error('MessageType and MessageDetails are required');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  let parsedMessageDetails = MessageDetails;
+  if (typeof MessageDetails === 'string' && MessageDetails.trim().startsWith('<')) {
+    try {
+      const wrappedXml = `<MessageDetails>${MessageDetails}</MessageDetails>`;
+      const parser = new xml2js.Parser({ explicitArray: false, mergeAttrs: true });
+      const result = await parser.parseStringPromise(wrappedXml);
+      parsedMessageDetails = result.MessageDetails;
+    } catch (parseError) {
+      const err = new Error('Invalid MessageDetails XML format: ' + parseError.message);
+      err.statusCode = 400;
+      throw err;
+    }
+  }
+
+  const validation = validateOutgoingMessageDetails(MessageType, parsedMessageDetails);
+  if (!validation.isValid) {
+    const err = new Error(validation.description);
+    err.statusCode = 400;
+    err.errors = validation.errors;
+    throw err;
+  }
+
+  return { parsedMessageDetails };
+}
+
+/**
  * Shared core for signing, logging, and sending an outgoing ESS/Utumishi message.
  * Extracted from outgoingMessagesController.triggerOutgoingMessage so any code path
  * (the manual-trigger HTTP route, product submission, etc.) reuses the exact same
@@ -84,31 +128,11 @@ async function sendOutgoingMessage({ tenant, user, correlationId, MessageType, M
 
   const msgId = MsgId || getMessageId(MessageType);
 
-  // Parse MessageDetails if it's a string (XML fragment)
-  let parsedMessageDetails = MessageDetails;
-  if (typeof MessageDetails === 'string' && MessageDetails.trim().startsWith('<')) {
-    try {
-      const wrappedXml = `<MessageDetails>${MessageDetails}</MessageDetails>`;
-      const parser = new xml2js.Parser({ explicitArray: false, mergeAttrs: true });
-      const result = await parser.parseStringPromise(wrappedXml);
-      parsedMessageDetails = result.MessageDetails;
-      logger.info('📝 Parsed MessageDetails from XML string to object');
-    } catch (parseError) {
-      logger.error('❌ Failed to parse MessageDetails XML string:', parseError.message);
-      const err = new Error('Invalid MessageDetails XML format: ' + parseError.message);
-      err.statusCode = 400;
-      throw err;
-    }
-  }
-
-  // Structural validation: required fields for this MessageType must be present
-  // before anything gets signed or sent to the live ESS gateway.
-  const validation = validateOutgoingMessageDetails(MessageType, parsedMessageDetails);
-  if (!validation.isValid) {
-    const err = new Error(validation.description);
-    err.statusCode = 400;
-    throw err;
-  }
+  // Parsing + required-field validation - same logic the standalone validate-only endpoint
+  // uses (validateMessageDetailsXml above), so this and that stay in sync by construction
+  // rather than by two copies of the same rules.
+  const { parsedMessageDetails } = await validateMessageDetailsXml(MessageType, MessageDetails);
+  logger.info(`📝 Parsed and validated MessageDetails for ${MessageType}`);
 
   // Tenant scope check: if the message references a loan application, it must
   // belong to the caller's tenant. Message types with no loan reference
@@ -181,4 +205,4 @@ async function sendOutgoingMessage({ tenant, user, correlationId, MessageType, M
   }
 }
 
-module.exports = { sendOutgoingMessage };
+module.exports = { sendOutgoingMessage, validateMessageDetailsXml };

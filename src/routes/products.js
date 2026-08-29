@@ -470,6 +470,7 @@ router.post('/', ...productWriteGuards, async (req, res) => {
       interestRate,
       processingFee,
       insurance,
+      otherCharges,
       minAmount,
       maxAmount,
       repaymentType,
@@ -515,6 +516,9 @@ router.post('/', ...productWriteGuards, async (req, res) => {
       interestRate,
       processingFee: processingFee || 0,
       insurance: insurance || 0,
+      // No `|| 0` here (unlike processingFee/insurance above) - leaving this undefined when
+      // omitted lets the schema's own default (50000) apply, instead of forcing 0.
+      otherCharges,
       minAmount,
       maxAmount,
       repaymentType: repaymentType || 'Flat',

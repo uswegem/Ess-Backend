@@ -6,6 +6,7 @@ const { getUtumishiEndpoint, getApiTimeoutMs } = require('../config/runtimeEnv')
 const { logOutgoingMessage, updateMessageLog } = require('../utils/messageLogger');
 const LoanMappingService = require('../services/loanMappingService');
 const { parseEssResponseCode } = require('../utils/essResponseParser');
+const { getUtumishiHttpsAgent } = require('../utils/utumishiHttpsAgent');
 
 // Main controller function
 exports.triggerLoanStatusRequest = async (req, res) => {
@@ -78,7 +79,8 @@ exports.triggerLoanStatusRequest = async (req, res) => {
         'Content-Type': 'application/xml',
         'Accept': 'application/xml'
       },
-      timeout: getApiTimeoutMs()
+      timeout: getApiTimeoutMs(),
+      httpsAgent: getUtumishiHttpsAgent()
     });
 
     logger.info('ESS Response received:', essResponse.status);

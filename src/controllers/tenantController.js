@@ -43,6 +43,18 @@ function canAccessTenant(req, tenantId) {
   return req.tenant?.tenantId === tenantId || req.tokenPayload?.tenantId === tenantId;
 }
 
+// Read-only, all-tenant visibility - deliberately separate from canManageAllTenants and
+// never used to gate a write path (update/patchStatus/delete/mifos/certificates/api keys
+// all still go through canAccessTenant, unchanged). 'tenants:read_all' is not in
+// TenantUser.ASSIGNABLE_PERMISSIONS and is never assignable via the self-service permission
+// editor (Users.js's Roles & permissions modal) - same deliberate-grant-only treatment as
+// reporting:all_tenants, granted by a direct write to a TenantUser's permissions array, not
+// through PUT .../users/:userId/permissions (whose schema would reject it).
+function canReadAllTenants(req) {
+  if (canManageAllTenants(req)) return true;
+  return Boolean(req.authContext?.permissions?.includes('tenants:read_all'));
+}
+
 class TenantController {
   static async create(req, res) {
     try {
@@ -72,7 +84,7 @@ class TenantController {
 
   static async list(req, res) {
     try {
-      const scopedTenantId = canManageAllTenants(req) ? undefined : req.tenant?.tenantId;
+      const scopedTenantId = canReadAllTenants(req) ? undefined : req.tenant?.tenantId;
       const result = await listTenants({ ...req.query, scopedTenantId });
       return sendSuccess(res, { data: { tenants: result.tenants }, pagination: result.pagination });
     } catch (error) {
@@ -83,7 +95,7 @@ class TenantController {
   static async getById(req, res) {
     try {
       const { tenantId } = req.params;
-      if (!canAccessTenant(req, tenantId)) {
+      if (!canAccessTenant(req, tenantId) && !canReadAllTenants(req)) {
         return sendError(res, 403, 'Access denied for this tenant');
       }
       const tenant = await getTenantById(tenantId);

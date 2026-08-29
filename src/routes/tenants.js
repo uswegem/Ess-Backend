@@ -15,10 +15,32 @@ const {
   mifosConfigSchema,
   createTenantUserSchema,
   updateTenantUserSchema,
+  updateUserPermissionsSchema,
   listTenantUsersQuerySchema
 } = require('../validations/tenantSchemas');
 
 const platformRoles = roleMiddleware(['super_admin', 'admin']);
+
+// permissionMiddleware('users:manage') alone only checks that the caller's JWT-embedded,
+// tenant-scoped membership contains that permission string - it does NOT verify :tenantId in
+// the URL actually matches the caller's own tenant (confirmed by reading permissionMiddleware
+// directly: no such comparison exists there or anywhere else on the sibling
+// PUT/DELETE /:tenantId/users/:userId routes above). That's a pre-existing gap on those
+// routes, out of scope to fix here, but this new reset-password action - which lets an admin
+// take over another user's credentials - gets its own explicit guard rather than inheriting
+// that gap silently.
+function requireOwnTenantOrPlatformAdmin(req, res, next) {
+  if (req.authContext?.isSuperAdmin) {
+    return next();
+  }
+  if (req.tenant?.tenantId && req.tenant.tenantId === req.params.tenantId) {
+    return next();
+  }
+  return res.status(403).json({
+    success: false,
+    message: 'Access denied. You can only manage users within your own tenant.'
+  });
+}
 
 const certUpload = multer({
   storage: multer.memoryStorage(),
@@ -364,6 +386,89 @@ router.post('/:tenantId/users', authMiddleware, permissionMiddleware('users:mana
  */
 router.put('/:tenantId/users/:userId', authMiddleware, permissionMiddleware('users:manage'), validateBody(updateTenantUserSchema), TenantUserController.update);
 router.delete('/:tenantId/users/:userId', authMiddleware, permissionMiddleware('users:manage'), TenantUserController.remove);
+
+/**
+ * @swagger
+ * /api/v1/tenants/{tenantId}/users/{userId}/permissions:
+ *   put:
+ *     summary: Edit a tenant user's custom permission overrides
+ *     description: >
+ *       Permissions-only counterpart to PUT /:tenantId/users/:userId. Requires users:manage
+ *       AND that the caller belongs to :tenantId (or holds platform-admin/super-admin
+ *       access). Rejects any reporting:* permission (API-key-only, never assignable to a
+ *       human user) and blocks a caller from removing their own users:manage access.
+ *     tags: [Tenant Users]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: tenantId
+ *         required: true
+ *         schema: { type: string }
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [permissions]
+ *             properties:
+ *               permissions:
+ *                 type: array
+ *                 items: { type: string }
+ *     responses:
+ *       200:
+ *         description: Permissions updated
+ *       400:
+ *         description: Invalid permission string, or would remove the caller's own admin access
+ *       403:
+ *         description: Caller does not belong to :tenantId
+ */
+router.put(
+  '/:tenantId/users/:userId/permissions',
+  authMiddleware,
+  permissionMiddleware('users:manage'),
+  requireOwnTenantOrPlatformAdmin,
+  validateBody(updateUserPermissionsSchema),
+  TenantUserController.updatePermissions
+);
+
+/**
+ * @swagger
+ * /api/v1/tenants/{tenantId}/users/{userId}/reset-password:
+ *   post:
+ *     summary: Admin-initiated password reset for a tenant user
+ *     description: >
+ *       Generates a new temporary password, invalidates the user's existing sessions, and
+ *       returns one-time credentials for the admin to share. Requires users:manage AND that
+ *       the caller belongs to :tenantId (or holds platform-admin/super-admin access).
+ *     tags: [Tenant Users]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: tenantId
+ *         required: true
+ *         schema: { type: string }
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Password reset; one-time credentials returned
+ */
+router.post(
+  '/:tenantId/users/:userId/reset-password',
+  authMiddleware,
+  permissionMiddleware('users:manage'),
+  requireOwnTenantOrPlatformAdmin,
+  TenantUserController.resetPassword
+);
 
 router.get('/:tenantId/certificates', authMiddleware, permissionMiddleware('tenant:read'), TenantCertificateController.getCertificates);
 

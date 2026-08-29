@@ -626,6 +626,80 @@ class PdfGeneratorService {
 
         return words.join('').trim();
     }
+
+    /**
+     * Generic tabular PDF - used by the Dashboard's detail-page "Export PDF" button
+     * (dashboardExportRoutes.js). Reuses the same pdf-lib patterns as htmlToPdf() above
+     * (A4 page, Helvetica/HelveticaBold, manual page-break handling), just laid out as a
+     * simple table instead of a formatted letter/agreement document.
+     *
+     * @param {string} title - page heading
+     * @param {string} subtitle - e.g. the active date range, shown under the title
+     * @param {{ field: string, headerName: string }[]} columns
+     * @param {Object[]} rows - plain objects keyed by each column's `field`
+     * @returns {Promise<Buffer>}
+     */
+    async generateTablePdf(title, subtitle, columns, rows) {
+        const pdfDoc = await PDFDocument.create();
+        const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+        const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+
+        const pageWidth = 841.89; // A4 landscape - detail tables can have 4-6 columns
+        const pageHeight = 595.28;
+        const margin = 40;
+        const rowHeight = 16;
+        const headerSize = 9;
+        const cellSize = 8;
+
+        let page = pdfDoc.addPage([pageWidth, pageHeight]);
+        let y = pageHeight - margin;
+
+        page.drawText(title, { x: margin, y, size: 16, font: boldFont, color: rgb(0, 0, 0) });
+        y -= 20;
+        if (subtitle) {
+            page.drawText(subtitle, { x: margin, y, size: 10, font, color: rgb(0.4, 0.4, 0.4) });
+            y -= 20;
+        } else {
+            y -= 6;
+        }
+
+        const tableWidth = pageWidth - 2 * margin;
+        const colWidth = tableWidth / columns.length;
+
+        const drawRow = (values, { bold = false, size = cellSize } = {}) => {
+            if (y < margin + rowHeight) {
+                page = pdfDoc.addPage([pageWidth, pageHeight]);
+                y = pageHeight - margin;
+            }
+            const selectedFont = bold ? boldFont : font;
+            values.forEach((value, i) => {
+                const text = value === null || value === undefined ? '' : String(value);
+                // Truncate rather than wrap - keeps every row a single line, which is what
+                // makes fixed rowHeight/page-break math above work without per-cell reflow.
+                const maxChars = Math.floor(colWidth / (size * 0.55));
+                const truncated = text.length > maxChars ? `${text.slice(0, maxChars - 1)}…` : text;
+                page.drawText(truncated, { x: margin + i * colWidth, y, size, font: selectedFont, color: rgb(0, 0, 0) });
+            });
+            y -= rowHeight;
+        };
+
+        drawRow(columns.map((c) => c.headerName), { bold: true, size: headerSize });
+        page.drawLine({
+            start: { x: margin, y: y + rowHeight - 4 },
+            end: { x: pageWidth - margin, y: y + rowHeight - 4 },
+            thickness: 0.75,
+            color: rgb(0.6, 0.6, 0.6)
+        });
+
+        if (rows.length === 0) {
+            drawRow(['No records found']);
+        } else {
+            rows.forEach((row) => drawRow(columns.map((c) => row[c.field])));
+        }
+
+        const pdfBytes = await pdfDoc.save();
+        return Buffer.from(pdfBytes);
+    }
 }
 
 module.exports = new PdfGeneratorService();

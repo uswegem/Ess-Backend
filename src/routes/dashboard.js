@@ -47,4 +47,62 @@ router.get('/activity', DashboardController.activity);
  */
 router.get('/messages', DashboardController.messages);
 
+/**
+ * @swagger
+ * /api/v1/dashboard/detail/{metric}:
+ *   get:
+ *     summary: Row-level data behind a MiraCore Summary card (click-through detail page)
+ *     tags: [Health & Monitoring]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: metric
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: from
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: to
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Underlying rows for the requested metric
+ */
+router.get('/detail/:metric', DashboardController.detail);
+
+/**
+ * @swagger
+ * /api/v1/dashboard/detail/{metric}/export/pdf:
+ *   get:
+ *     summary: PDF export of a detail page's rows
+ *     tags: [Health & Monitoring]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: metric
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: from
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: to
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: PDF file
+ *         content:
+ *           application/pdf: {}
+ */
+router.get('/detail/:metric/export/pdf', DashboardController.exportPdf);
+
 module.exports = router;

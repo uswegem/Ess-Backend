@@ -126,29 +126,99 @@ router.get('/loan/list-products', authMiddleware, async (req, res) => {
  *       200:
  *         description: Loan list
  */
+// Shared filter-building for both the JSON listing and its PDF export below, so the two
+// can never drift out of sync on what counts as "currently filtered" - see Loan.js's
+// Export PDF button, which sends this same param set to get an identical result set.
+function buildLoanListParams(req) {
+    const { status, search, page, limit, excludeStatuses, startDate, endDate } = req.query;
+    return {
+        tenantId: req.tenant?.tenantId || null,
+        status,
+        // Opt-in only: shared with the general /loan page, which never sends this param,
+        // so its results are unaffected. The message-trigger loan lookup sends it explicitly
+        // to exclude CHARGES_CALCULATED loans (no LOAN_OFFER_REQUEST received yet, so no
+        // outgoing message would be meaningful to trigger for them).
+        excludeStatuses,
+        // Single unified search box - see getAllWithDetails() in loanMappingService.js for
+        // the full field list this matches against (application #, check #, client name
+        // parts, MIFOS loan ID/account).
+        search,
+        startDate,
+        endDate,
+        page,
+        // Default kept high (rather than the service's default of 20) so callers that
+        // don't paginate (e.g. the message-trigger loan lookup) still get the full list.
+        limit: limit || 500
+    };
+}
+
 router.get('/loan/list-employee-loan', authMiddleware, async (req, res) => {
     try {
-        const { status, applicationNumber, checkNumber, clientName, page, limit, excludeStatuses } = req.query;
-        const loans = await LoanMappingService.getAllWithDetails({
-          tenantId: req.tenant?.tenantId || null,
-          status,
-          // Opt-in only: shared with the general /loan page, which never sends this param,
-          // so its results are unaffected. The message-trigger loan lookup sends it explicitly
-          // to exclude CHARGES_CALCULATED loans (no LOAN_OFFER_REQUEST received yet, so no
-          // outgoing message would be meaningful to trigger for them).
-          excludeStatuses,
-          applicationNumber,
-          checkNumber,
-          clientName,
-          page,
-          // Default kept high (rather than the service's default of 20) so callers that
-          // don't paginate (e.g. the message-trigger loan lookup) still get the full list.
-          limit: limit || 500
-        });
+        const loans = await LoanMappingService.getAllWithDetails(buildLoanListParams(req));
         res.json({
             success: true,
             data: { loans }
         });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+/**
+ * @swagger
+ * /api/v1/loan/list-employee-loan/export/pdf:
+ *   get:
+ *     summary: PDF export of the Loan Management table, respecting current filters
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: PDF file
+ *         content:
+ *           application/pdf: {}
+ */
+router.get('/loan/list-employee-loan/export/pdf', authMiddleware, async (req, res) => {
+    try {
+        const loans = await LoanMappingService.getAllWithDetails(buildLoanListParams(req));
+        const pdfGeneratorService = require('../services/pdfGeneratorService');
+
+        const columns = [
+            { field: 'essApplicationNumber', headerName: 'Application #' },
+            { field: 'productCode', headerName: 'Product' },
+            { field: 'clientName', headerName: 'Client' },
+            { field: 'requestedAmount', headerName: 'Amount' },
+            { field: 'tenure', headerName: 'Tenure (mo)' },
+            { field: 'status', headerName: 'Status' },
+            { field: 'createdAt', headerName: 'Created' },
+            { field: 'mifosLoanId', headerName: 'MIFOS Loan ID' },
+        ];
+        const rows = loans.map((loan) => ({
+            essApplicationNumber: loan.essApplicationNumber,
+            productCode: loan.productCode,
+            // getAllWithDetails() already extracts metadata.clientData to a top-level
+            // `clientData` field (see loanMappingService.js) - matches Loan.js's own
+            // clientDisplayName() helper exactly, so the PDF and the on-screen table never
+            // show a different name for the same loan.
+            clientName: [loan.clientData?.firstName, loan.clientData?.middleName, loan.clientData?.lastName]
+                .filter(Boolean).join(' ') || loan.clientData?.checkNumber || '—',
+            requestedAmount: loan.requestedAmount,
+            tenure: loan.tenure,
+            status: loan.status,
+            createdAt: loan.createdAt ? new Date(loan.createdAt).toLocaleString() : '—',
+            mifosLoanId: loan.mifosLoanId || '—',
+        }));
+
+        const { startDate, endDate } = req.query;
+        const subtitle = (startDate || endDate) ? `${startDate || '…'} to ${endDate || '…'}` : undefined;
+
+        const pdfBuffer = await pdfGeneratorService.generateTablePdf('Loan Management', subtitle, columns, rows);
+
+        res.set({
+            'Content-Type': 'application/pdf',
+            'Content-Disposition': `attachment; filename="loans-${Date.now()}.pdf"`
+        });
+        res.send(pdfBuffer);
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
@@ -259,6 +329,9 @@ router.get('/messages/pending-responses', authMiddleware, async (req, res) => {
 // outgoingMessagesController for the elevated 'messages:trigger_sensitive'
 // check on money-movement/loan-finality message types.
 router.post('/outgoing-message', authMiddleware, permissionMiddleware('messages:trigger'), outgoingMessagesController.triggerOutgoingMessage);
+// Pre-submit check only - same base permission as the send route above, not the elevated
+// 'messages:trigger_sensitive' (see outgoingMessagesController.validateOutgoingMessage).
+router.post('/outgoing-message/validate', authMiddleware, permissionMiddleware('messages:trigger'), outgoingMessagesController.validateOutgoingMessage);
 router.post('/loan-status-request', authMiddleware, permissionMiddleware('messages:trigger'), loanStatusController.triggerLoanStatusRequest);
 
 module.exports = router;

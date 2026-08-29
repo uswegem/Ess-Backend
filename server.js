@@ -311,6 +311,11 @@ app.use('/api/v1/tenants/:tenantId/api-keys', apiKeyRoutes);
 // Loan action routes for manual notifications (protected)
 app.use('/api/v1/loan-actions', loanActionsRoutes);
 
+// Internal read-only reporting endpoints for the Grafana "Live" dashboard
+// (permission-gated via 'reporting:read' - see src/routes/reporting.js)
+const reportingRoutes = require('./src/routes/reporting');
+app.use('/api/v1/internal/reporting', reportingRoutes);
+
 // MIFOS administration and monitoring routes
 const mifosAdminRoutes = require('./src/routes/mifosAdmin');
 app.use('/api/v1/mifos', mifosAdminRoutes);

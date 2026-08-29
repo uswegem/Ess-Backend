@@ -1,4 +1,5 @@
 const Joi = require('joi');
+const { ASSIGNABLE_PERMISSIONS } = require('../models/TenantUser');
 
 const TENANT_ID_PATTERN = /^[a-z0-9][a-z0-9_-]{2,62}$/;
 const FSP_CODE_PATTERN = /^[A-Z0-9]{2,20}$/;
@@ -127,14 +128,24 @@ const createTenantUserSchema = Joi.object({
   role: Joi.string().valid(...TENANT_ROLES).required(),
   username: Joi.string().trim().min(3).max(50).optional(),
   phone: Joi.string().trim().max(30).allow('', null).optional(),
-  permissions: Joi.array().items(Joi.string().trim()).optional()
+  // Restricted to known, role-eligible permission strings - excludes API-key-only
+  // permissions (reporting:read, reporting:all_tenants) which must never be grantable to a
+  // human tenant user through this schema. See TenantUser.ASSIGNABLE_PERMISSIONS.
+  permissions: Joi.array().items(Joi.string().trim().valid(...ASSIGNABLE_PERMISSIONS)).optional()
 });
 
 const updateTenantUserSchema = Joi.object({
   role: Joi.string().valid(...TENANT_ROLES).optional(),
-  permissions: Joi.array().items(Joi.string().trim()).optional(),
+  permissions: Joi.array().items(Joi.string().trim().valid(...ASSIGNABLE_PERMISSIONS)).optional(),
   isActive: Joi.boolean().optional()
 }).min(1);
+
+// Dedicated, permissions-only payload for PUT .../users/:userId/permissions - same
+// ASSIGNABLE_PERMISSIONS allow-list as above (reporting:* rejected here too), but scoped to
+// exactly one field so this endpoint can't be used to also change role/isActive.
+const updateUserPermissionsSchema = Joi.object({
+  permissions: Joi.array().items(Joi.string().trim().valid(...ASSIGNABLE_PERMISSIONS)).required()
+});
 
 const listTenantsQuerySchema = Joi.object({
   page: Joi.number().integer().min(1).default(1),
@@ -164,6 +175,7 @@ module.exports = {
   createApiKeySchema,
   createTenantUserSchema,
   updateTenantUserSchema,
+  updateUserPermissionsSchema,
   listTenantsQuerySchema,
   listTenantUsersQuerySchema
 };

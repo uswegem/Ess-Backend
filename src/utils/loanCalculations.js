@@ -182,13 +182,23 @@ class LoanCalculations {
   /**
    * Calculate loan charges breakdown
    * @param {number} loanAmount - Principal loan amount
+   * @param {number} adminFeeRate - Processing fee rate as a fraction (e.g. 0.02 for 2%)
+   * @param {number} insuranceRate - Insurance rate as a fraction (e.g. 0.0075 for 0.75%)
+   * @param {number} otherCharges - Fixed other charges amount
    * @returns {object} Breakdown of charges
    */
-  static calculateCharges(loanAmount) {
+  static calculateCharges(loanAmount, adminFeeRate, insuranceRate, otherCharges) {
+    if (adminFeeRate === undefined || insuranceRate === undefined || otherCharges === undefined) {
+      // No internal LOAN_CONSTANTS fallback - every caller now resolves these from a
+      // tenant-scoped Product record (see loanUtils.resolveProductForCalculation) and
+      // must pass them explicitly. A caller reaching this without them is a bug, not a
+      // case to silently paper over with a global default.
+      throw new Error('LoanCalculations.calculateCharges requires adminFeeRate, insuranceRate, and otherCharges to be passed explicitly');
+    }
     return {
-      processingFee: round2(loanAmount * (LOAN_CONSTANTS?.ADMIN_FEE_RATE || 0.02)),
-      insurance: round2(loanAmount * (LOAN_CONSTANTS?.INSURANCE_RATE || 0.015)),
-      otherCharges: LOAN_CONSTANTS?.OTHER_CHARGES || 50000
+      processingFee: round2(loanAmount * adminFeeRate),
+      insurance: round2(loanAmount * insuranceRate),
+      otherCharges: otherCharges
     };
   }
 

@@ -1,8 +1,18 @@
 const express = require('express');
+const rateLimit = require('express-rate-limit');
 const router = express.Router();
 const AuthController = require('../controllers/authController');
 const { authMiddleware, roleMiddleware } = require('../middleware/authMiddleware');
 const apiController = require('../controllers/apiController');
+
+// Same shape as onboarding.js's publicLimiter - per-IP throttle on a public,
+// enumeration-sensitive endpoint. forgot-password also has a per-account throttle inside
+// AuthController itself (see PasswordResetToken.countRecentForUser).
+const forgotPasswordLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: { success: false, message: 'Too many requests, please try again later.' }
+});
 
 /**
  * @swagger
@@ -108,6 +118,57 @@ const apiController = require('../controllers/apiController');
 router.post('/login', AuthController.login);
 router.post('/login-with-api-key', AuthController.loginWithApiKey);
 router.post('/refresh', AuthController.refresh);
+
+/**
+ * @swagger
+ * /api/v1/auth/forgot-password:
+ *   post:
+ *     summary: Request a password reset link
+ *     description: Public endpoint, rate-limited. Always returns the same generic message regardless of whether the email is registered (avoids account enumeration).
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [email]
+ *             properties:
+ *               email: { type: string, format: email }
+ *     responses:
+ *       200:
+ *         description: Generic acknowledgement (sent or not, response is identical)
+ *       400:
+ *         description: Email missing
+ *       429:
+ *         description: Rate limited
+ */
+router.post('/forgot-password', forgotPasswordLimiter, AuthController.forgotPassword);
+
+/**
+ * @swagger
+ * /api/v1/auth/reset-password:
+ *   post:
+ *     summary: Reset password using a token from the forgot-password email
+ *     description: Public endpoint. Token is single-use and expires 20 minutes after being issued. On success, all of the user's active sessions/refresh tokens are revoked.
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [token, newPassword]
+ *             properties:
+ *               token: { type: string }
+ *               newPassword: { type: string, format: password, minLength: 6 }
+ *     responses:
+ *       200:
+ *         description: Password reset successful
+ *       400:
+ *         description: Invalid/expired token, or missing fields
+ */
+router.post('/reset-password', AuthController.resetPassword);
 
 /**
  * @swagger

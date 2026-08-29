@@ -6,6 +6,7 @@ const { AuditLog } = require('../../models/AuditLog');
 const { getMessageId } = require('../../utils/messageIdGenerator');
 const pdfGeneratorService = require('../../services/pdfGeneratorService');
 const { getUtumishiEndpoint } = require('../../config/runtimeEnv');
+const { getUtumishiHttpsAgent } = require('../../utils/utumishiHttpsAgent');
 
 const handleMifosWebhook = async (req, res) => {
     try {
@@ -206,7 +207,8 @@ async function sendLoanInitialApprovalNotification(loanMapping) {
             headers: {
                 'Content-Type': 'application/xml'
             },
-            timeout: 30000
+            timeout: 30000,
+            httpsAgent: getUtumishiHttpsAgent()
         });
 
         logger.info('✅ LOAN_INITIAL_APPROVAL_NOTIFICATION sent successfully:', {

@@ -41,6 +41,13 @@ const ROLE_PERMISSIONS = {
   ]
 };
 
+// Every permission string that may be granted to a tenant user (via role default or a
+// custom override on TenantUser.permissions) - the union of all role defaults above.
+// Deliberately excludes API-key-only permissions (reporting:read, reporting:all_tenants -
+// see routes/reporting.js) which are never granted to human tenant users, on any role, and
+// must stay unassignable through the Users page's permission editor.
+const ASSIGNABLE_PERMISSIONS = [...new Set(Object.values(ROLE_PERMISSIONS).flat())].sort();
+
 const tenantUserSchema = new mongoose.Schema({
   tenantId: {
     type: String,
@@ -115,3 +122,4 @@ tenantUserSchema.statics.findActiveTenantsForUser = function findActiveTenantsFo
 module.exports = mongoose.model('TenantUser', tenantUserSchema);
 module.exports.TENANT_ROLES = TENANT_ROLES;
 module.exports.ROLE_PERMISSIONS = ROLE_PERMISSIONS;
+module.exports.ASSIGNABLE_PERMISSIONS = ASSIGNABLE_PERMISSIONS;

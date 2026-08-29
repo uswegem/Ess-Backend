@@ -154,6 +154,7 @@ class LoanMappingService {
         productCode: loanDetails.productCode || "17",
         requestedAmount: loanDetails.requestedAmount,
         tenure: loanDetails.tenure || 24,
+        totalAmountToPay: loanDetails.totalAmountToPay,
         mifosClientId: loanDetails.clientId,
         mifosLoanId: loanDetails.loanId,
         status: loanDetails.status || 'INITIAL_OFFER',
@@ -568,9 +569,7 @@ class LoanMappingService {
         limit = 20,
         status,
         excludeStatuses,
-        applicationNumber,
-        checkNumber,
-        clientName,
+        search,
         startDate,
         endDate,
         sort = 'createdAt',
@@ -589,18 +588,39 @@ class LoanMappingService {
         }
       }
 
-      if (applicationNumber && applicationNumber !== '') {
-        filter.essApplicationNumber = { $regex: applicationNumber, $options: 'i' };
+      // Single unified search box (Loan Management page) - loose, case-insensitive "contains
+      // anywhere" match (no ^/$ anchors) across every field a user would plausibly search a
+      // loan by. Root-cause fix for the earlier surname-search bug: that version only ever
+      // regexed metadata.clientData.firstName, so "Marcus"/"Joseph" against a client named
+      // "Zakayo Marcus Joseph" never matched - middleName/lastName/fullName were never
+      // checked at all. Covering all four name sub-fields (not just fullName) matters because
+      // most records in this collection (880 of 893, per a live count) have none of
+      // middleName/lastName/fullName populated - only firstName - so relying on fullName
+      // alone would silently miss most of the table for anything but a firstName-only search.
+      //
+      // mifosLoanId is stored as a Number (see LoanMapping.js), so a plain $regex can't match
+      // it directly - $expr + $regexMatch on its string-cast value is the documented way to
+      // regex-search a numeric field in a find() filter (works from MongoDB 3.6+).
+      //
+      // Plain $or + regex, not a $text index: this table realistically shows ~14-20 rows
+      // (non-CHARGES_CALCULATED loans), and under 1,000 even across the full unfiltered
+      // collection - a text index would add write-side maintenance cost to solve a scaling
+      // problem this table doesn't have. Revisit only if row counts grow by orders of
+      // magnitude.
+      if (search && search !== '') {
+        const re = { $regex: search, $options: 'i' };
+        filter.$or = [
+          { essApplicationNumber: re },
+          { essCheckNumber: re },
+          { 'metadata.clientData.firstName': re },
+          { 'metadata.clientData.middleName': re },
+          { 'metadata.clientData.lastName': re },
+          { 'metadata.clientData.fullName': re },
+          { mifosLoanAccountNumber: re },
+          { $expr: { $regexMatch: { input: { $toString: { $ifNull: ['$mifosLoanId', ''] } }, regex: search, options: 'i' } } },
+        ];
       }
 
-      if (checkNumber && checkNumber !== '') {
-        filter.essCheckNumber = { $regex: checkNumber, $options: 'i' };
-      }
-
-      if (clientName && clientName !== '') {
-        filter['metadata.clientData.firstName'] = { $regex: clientName, $options: 'i' };
-      }
-      
       if (startDate || endDate) {
         filter.createdAt = {};
         if (startDate) {
@@ -682,6 +702,7 @@ class LoanMappingService {
         productCode: loan.productCode,
         requestedAmount: loan.requestedAmount,
         tenure: loan.tenure,
+        totalAmountToPay: loan.totalAmountToPay,
         status: loan.status,
         createdAt: loan.createdAt,
         updatedAt: loan.updatedAt,
@@ -786,12 +807,23 @@ class LoanMappingService {
     // so these rules key off LoanMapping.status/originalMessageType instead.
     const { status, originalMessageType } = loanMapping;
 
+    // LOAN_INITIAL_APPROVAL_NOTIFICATION goes out via sendCallback() (callbackUtils.js),
+    // which never writes a MessageLog entry - the only record of an actual successful send
+    // is LoanMapping.metadata.callbacksSent. status stays 'INITIAL_APPROVAL_SENT' permanently
+    // once it's the resting state (not a transient "about to send" flag), so without this
+    // check the notification is suggested forever, even for a loan that already has a
+    // confirmed successful delivery - only re-suggest it if it was never actually confirmed
+    // sent (still worth doing, e.g. after a prior failed attempt).
+    const initialApprovalAlreadySent = (loanMapping.metadata?.callbacksSent || []).some(
+      (c) => c.type === 'LOAN_INITIAL_APPROVAL_NOTIFICATION' && c.status === 'success'
+    );
+
     const offerRequestTypes = ['LOAN_OFFER_REQUEST', 'TOP_UP_OFFER_REQUEST', 'LOAN_TAKEOVER_OFFER_REQUEST'];
-    if (offerRequestTypes.includes(originalMessageType) && ['OFFER_SUBMITTED', 'INITIAL_APPROVAL_SENT'].includes(status)) {
+    if (offerRequestTypes.includes(originalMessageType) && ['OFFER_SUBMITTED', 'INITIAL_APPROVAL_SENT'].includes(status) && !initialApprovalAlreadySent) {
       addSuggestion('LOAN_INITIAL_APPROVAL_NOTIFICATION', `status:${status}`);
     }
 
-    if (originalMessageType === 'LOAN_RESTRUCTURE_REQUEST' && status === 'RESTRUCTURE_INITIAL_APPROVAL_SENT') {
+    if (originalMessageType === 'LOAN_RESTRUCTURE_REQUEST' && status === 'RESTRUCTURE_INITIAL_APPROVAL_SENT' && !initialApprovalAlreadySent) {
       addSuggestion('LOAN_INITIAL_APPROVAL_NOTIFICATION', `status:${status}`);
     }
 

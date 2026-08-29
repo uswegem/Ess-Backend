@@ -6,6 +6,8 @@ const LOAN_CONSTANTS = require('../../utils/loanConstants');
 const loanCalculations = require('../../utils/loanCalculations');
 const LoanMapping = require('../../models/LoanMapping');
 const cbsApi = require('../../services/cbs.api');
+const path = require('path');
+const loanUtils = require(path.resolve(__dirname, '../../utils/loanUtils.js'));
 
 /**
  * Handle LOAN_RESTRUCTURE_AFFORDABILITY_REQUEST
@@ -94,11 +96,19 @@ const handleLoanRestructureAffordabilityRequest = async (parsedData, res) => {
         // Parse input parameters - either Tenure OR DesiredDeductibleAmount (EMI) will be provided
         const providedTenure = messageDetails.Tenure !== undefined ? parseInt(messageDetails.Tenure) : 0;
         const providedEMI = messageDetails.DesiredDeductibleAmount !== undefined ? parseFloat(messageDetails.DesiredDeductibleAmount) : 0;
-        
-        // Interest rate from constants
-        const interestRate = LOAN_CONSTANTS.DEFAULT_INTEREST_RATE;
-        const maxTenure = LOAN_CONSTANTS.MAX_TENURE || 96;
-        
+
+        // Tenant-scoped product lookup - the same product this loan was originally booked
+        // under (LoanMapping.productCode). No LOAN_CONSTANTS fallback - a missing/inactive
+        // product throws (caught below, returned as an explicit 8019 error response).
+        let productRates;
+        try {
+            productRates = await loanUtils.resolveProductForCalculation(loanMapping.productCode);
+        } catch (productError) {
+            logger.error(`Product resolution failed for restructure affordability: ${productError.message}`);
+            return sendErrorResponse(res, productError.errorCode || '8019', productError.message, 'xml', parsedData);
+        }
+        const { interestRate, processingFeeRate, insuranceRate, otherCharges: otherChargesAmount, maxTenure } = productRates;
+
         let calculatedTenure = 0;
         let calculatedEMI = 0;
 
@@ -127,10 +137,10 @@ const handleLoanRestructureAffordabilityRequest = async (parsedData, res) => {
             logger.info(`Scenario B (EMI provided): EMI=${calculatedEMI}, Calculated Tenure=${calculatedTenure}`);
             
         } else {
-            // Neither provided - use default tenure
-            calculatedTenure = LOAN_CONSTANTS.DEFAULT_TENURE || 96;
+            // Neither provided - use the product's max tenure as the default
+            calculatedTenure = maxTenure;
             calculatedEMI = await loanCalculations.calculateEMI(loanAmount, interestRate, calculatedTenure);
-            logger.info(`Default: Using default tenure=${calculatedTenure}, EMI=${calculatedEMI}`);
+            logger.info(`Default: Using product max tenure=${calculatedTenure}, EMI=${calculatedEMI}`);
         }
 
         // Validate calculations
@@ -140,7 +150,7 @@ const handleLoanRestructureAffordabilityRequest = async (parsedData, res) => {
         }
 
         // Calculate charges on the loan amount
-        const charges = loanCalculations.calculateCharges(loanAmount);
+        const charges = loanCalculations.calculateCharges(loanAmount, processingFeeRate, insuranceRate, otherChargesAmount);
         const totalProcessingFees = charges.processingFee;
         const totalInsurance = charges.insurance;
         const otherCharges = charges.otherCharges;

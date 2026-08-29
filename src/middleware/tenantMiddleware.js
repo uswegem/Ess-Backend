@@ -28,7 +28,11 @@ const PUBLIC_PATH_PREFIXES = [
   '/api/auth/login',
   '/api/v1/auth/login-with-api-key',
   '/api/auth/login-with-api-key',
-  '/api/v1/auth/refresh'
+  '/api/v1/auth/refresh',
+  '/api/v1/auth/forgot-password',
+  '/api/auth/forgot-password',
+  '/api/v1/auth/reset-password',
+  '/api/auth/reset-password'
 ];
 
 const TENANT_OPTIONAL_PREFIXES = [

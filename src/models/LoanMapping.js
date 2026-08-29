@@ -68,6 +68,44 @@ const loanMappingSchema = new mongoose.Schema({
     required: true
   },
 
+  // Principal + total interest amount, as quoted/approved for the current terms of this
+  // loan (recomputed and overwritten on restructure, since restructure supersedes the
+  // original terms). Populated by loanOfferHandler.js, topUpOfferHandler.js,
+  // takeoverOfferHandler.js, loanRestructureHandler.js, and loanChargesHandler.js - see
+  // LoanMappingService.createInitialMapping()/updateStatus() for how each write path
+  // reaches this field.
+  totalAmountToPay: {
+    type: Number
+  },
+
+  // Snapshot of the tenant-scoped Product record used to calculate this loan's quote
+  // (written once at LOAN_CHARGES_REQUEST time in loanChargesHandler.js, refreshed on every
+  // repeat charges request). Exists so the actual MIFOS loan-creation step
+  // (apiController.js's handleLoanFinalApproval) can book the loan at the rate that was
+  // genuinely quoted to the customer, instead of re-querying the Product record fresh (which
+  // could have changed since the quote) or falling back to a hardcoded value. Left unset
+  // (undefined) when no matching Product was found at quote time or for records created
+  // before this field existed - callers must treat "unset" as "no quote to trust", not
+  // silently substitute a default.
+  quotedMifosProductId: {
+    type: Number
+  },
+  quotedInterestRate: {
+    type: Number
+  },
+  quotedProcessingFee: {
+    type: Number
+  },
+  quotedInsurance: {
+    type: Number
+  },
+  quotedOtherCharges: {
+    type: Number
+  },
+  quotedAt: {
+    type: Date
+  },
+
   // Track original message type that initiated this loan
   originalMessageType: {
     type: String,

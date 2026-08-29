@@ -8,6 +8,7 @@ const { sendCallback } = require('../utils/callbackUtils');
 const { sendErrorResponse } = require('../utils/responseUtils');
 const { LoanCalculate, CreateTopUpLoanOffer, CreateTakeoverLoanOffer, CreateLoanOffer } = require('../services/loanService');
 const LoanMappingService = require('../services/loanMappingService');
+const Product = require('../models/Product');
 const ClientService = require('../services/clientService');
 const cbsApi = require('../services/cbs.api');
 const { formatDateForMifos, formatDateForUTUMISHI, formatDateTimeForUTUMISHI } = require('../utils/dateUtils');
@@ -24,7 +25,7 @@ const { generateLoanNumber, generateFSPReferenceNumber } = require('../utils/loa
 
 // Import metrics tracking
 const { trackLoanMessage, trackLoanError } = require('../middleware/metricsMiddleware');
-const { runWithRequestTenant } = require('../utils/tenantContext');
+const { runWithRequestTenant, getActiveTenantContext } = require('../utils/tenantContext');
 
 const parser = new xml2js.Parser({
     explicitArray: false,
@@ -424,25 +425,41 @@ const handleLoanFinalApproval = async (parsedData, res) => {
                     essCheckNumber: messageDetails.FSPReferenceNumber || messageDetails.CheckNumber,
                     productCode: '17',
                     requestedAmount: messageDetails.LoanAmount || messageDetails.RequestedAmount || 5000000,
-                    tenure: messageDetails.LoanTenure || messageDetails.Tenure || 60,
+                    // ESS final-approval messages don't reliably echo back the loan term, so
+                    // don't clobber the tenure that was already recorded at offer time with a
+                    // hardcoded guess. Fall back to the existing mapping's tenure; if there's no
+                    // existing mapping either, omit the key entirely so updateLoanMapping()'s
+                    // `!== undefined` merge check leaves it out of the update (its own
+                    // new-mapping path applies a sane default in that case).
+                    ...((messageDetails.LoanTenure || messageDetails.Tenure || existingMapping?.tenure) !== undefined && {
+                        tenure: messageDetails.LoanTenure || messageDetails.Tenure || existingMapping?.tenure
+                    }),
                     finalApprovalReceivedAt: new Date().toISOString()
                 };
                 
-                // Handle rejection with proper actor tracking
+                // Handle rejection with proper actor tracking. Set directly on loanMappingData
+                // (a plain object) rather than calling rejectLoan(existingMapping, ...) - that
+                // helper calls .save() on its argument, but existingMapping here is always a
+                // .lean() result (see getByEssApplicationNumber above), which has no document
+                // methods. That call threw on every rejection of an application with an
+                // existing mapping (the normal case - final approval almost always follows a
+                // prior offer flow), the exception was swallowed by this block's outer catch
+                // (there's no ESS error channel left open by this point - the 8000 ack was
+                // already sent), and the status update was silently lost. loanMappingData.status
+                // is already set to 'REJECTED' above; setting rejectedBy/rejectionReason here
+                // unconditionally (works identically whether or not existingMapping exists,
+                // since this is a plain object, never a crash risk) lets the existing,
+                // unconditional LoanMappingService.updateLoanMapping(loanMappingData) call
+                // below persist all three fields together via its safe partial-field merge.
                 if (messageDetails.Approval === 'REJECTED') {
                     const reason = messageDetails.Reason || 'Application rejected by employer';
-                    if (existingMapping) {
-                        await rejectLoan(existingMapping, 'EMPLOYER', reason);
-                        logger.info('✅ Loan rejected with actor tracking:', {
-                            applicationNumber: messageDetails.ApplicationNumber,
-                            rejectedBy: 'EMPLOYER',
-                            reason: reason
-                        });
-                    } else {
-                        // For new mapping, set rejection info in metadata
-                        loanMappingData.rejectedBy = 'EMPLOYER';
-                        loanMappingData.rejectionReason = reason;
-                    }
+                    loanMappingData.rejectedBy = 'EMPLOYER';
+                    loanMappingData.rejectionReason = reason;
+                    logger.info('Loan marked for rejection (persisted below via updateLoanMapping):', {
+                        applicationNumber: messageDetails.ApplicationNumber,
+                        rejectedBy: 'EMPLOYER',
+                        reason: reason
+                    });
                 }
 
                         // If approved, create client in CBS and create loan
@@ -660,7 +677,13 @@ const handleLoanFinalApproval = async (parsedData, res) => {
                                         genderId: clientData.Sex === 'M' || clientData.sex === 'M' ? 15 : 16,
                                         clientTypeId: 17,
                                         submittedOnDate: new Date().toISOString().split('T')[0],
-                                        legalFormId: 1
+                                        legalFormId: 1,
+                                        // Root-cause fix: these were never sent, despite mobileNumber
+                                        // (line above) having been computed for this exact purpose and
+                                        // then left unused. ESS supplies both - carried through to Mongo
+                                        // as clientData.mobileNo/emailAddress a few lines up.
+                                        ...(mobileNumber && { mobileNo: mobileNumber }),
+                                        ...(clientData.emailAddress && { emailAddress: clientData.emailAddress })
                                     };
                                     
                                     logger.info('📄 Creating client with payload:', JSON.stringify(clientPayload, null, 2));
@@ -679,37 +702,77 @@ const handleLoanFinalApproval = async (parsedData, res) => {
 
                                 if (clientId) {
                                     // Get loan amount and tenure from existing mapping or message details
-                                    const loanAmount = existingMapping?.requestedAmount || 
+                                    const loanAmount = existingMapping?.requestedAmount ||
                                                      existingMapping?.metadata?.loanData?.requestedAmount ||
-                                                     messageDetails.LoanAmount || 
-                                                     messageDetails.RequestedAmount || 
+                                                     messageDetails.LoanAmount ||
+                                                     messageDetails.RequestedAmount ||
                                                      5000000;
                                     const loanTenure = existingMapping?.tenure ||
                                                      existingMapping?.metadata?.loanData?.tenure ||
-                                                     messageDetails.LoanTenure || 
-                                                     messageDetails.Tenure || 
+                                                     messageDetails.LoanTenure ||
+                                                     messageDetails.Tenure ||
                                                      60;
-                                    
+
                                     logger.info(`Using loan amount: ${loanAmount}, tenure: ${loanTenure}`);
-                                    
+
                                     // Check if this is a top-up or takeover loan
                                     const isTopUp = loanMappingData.isTopUp === true;
                                     const isTakeover = loanMappingData.isTakeover === true;
                                     const existingLoanId = loanMappingData.existingLoanId;
                                     const takeOverAmount = parseFloat(existingMapping?.metadata?.loanData?.takeOverAmount || 0);
-                                    
+
                                     if (isTopUp && existingLoanId) {
                                         logger.info(`🔄 Creating TOP-UP loan linked to existing loan ${existingLoanId}`);
                                     }
-                                    
+
                                     if (isTakeover && takeOverAmount > 0) {
                                         logger.info(`🔄 Creating TAKEOVER loan - Total: ${loanAmount}, TakeOver Amount: ${takeOverAmount}, Net to Customer: ${loanAmount - takeOverAmount}`);
                                     }
-                                    
+
+                                    // Resolve the product/rate to book this loan at. Prefer the snapshot taken
+                                    // at LOAN_CHARGES_REQUEST quote time (loanChargesHandler.js) - the rate the
+                                    // customer was actually quoted - over a fresh Product lookup, since the
+                                    // Product record may have been edited since the quote. Only fall back to a
+                                    // fresh lookup for pre-fix LoanMapping records that predate the snapshot
+                                    // fields. Never fall back to a hardcoded productId/rate - a genuine "no
+                                    // matching product" is a hard failure, not a guess (see below).
+                                    let bookingMifosProductId = existingMapping?.quotedMifosProductId;
+                                    let bookingInterestRate = existingMapping?.quotedInterestRate;
+                                    let bookingRateSource = 'quoted-snapshot';
+
+                                    if (bookingMifosProductId == null || bookingInterestRate == null) {
+                                        bookingRateSource = 'fresh-product-lookup';
+                                        const bookingProductCode = existingMapping?.productCode || messageDetails.ProductCode || '17';
+                                        const bookingTenantId = getActiveTenantContext()?.tenantId || null;
+                                        try {
+                                            const productQuery = { productCode: bookingProductCode, isActive: true };
+                                            if (bookingTenantId) productQuery.tenantId = bookingTenantId;
+                                            const fallbackProduct = await Product.findOne(productQuery).lean();
+                                            bookingMifosProductId = fallbackProduct?.mifosProductId;
+                                            bookingInterestRate = fallbackProduct?.interestRate;
+                                        } catch (productLookupError) {
+                                            logger.error('Fallback product lookup failed during loan creation:', productLookupError.message);
+                                        }
+                                    }
+
+                                    if (bookingMifosProductId == null || bookingInterestRate == null) {
+                                        const failureReason = `No quoted rate snapshot and no matching Product found for productCode=${existingMapping?.productCode || messageDetails.ProductCode || '17'}, tenantId=${getActiveTenantContext()?.tenantId || null} - cannot book loan without a real product/rate`;
+                                        logger.error(`❌ ${failureReason}`);
+                                        loanMappingData.status = 'FAILED';
+                                        loanMappingData.metadata = {
+                                            ...(loanMappingData.metadata || {}),
+                                            failureReason,
+                                            failedAt: new Date().toISOString()
+                                        };
+                                        throw new Error(failureReason);
+                                    }
+
+                                    logger.info(`Booking loan with productId=${bookingMifosProductId}, interestRate=${bookingInterestRate} (source: ${bookingRateSource})`);
+
                                     // Create loan in CBS
                                     const loanPayload = {
                                         clientId: clientId,
-                                        productId: 17, // ESS Loan product
+                                        productId: bookingMifosProductId,
                                         principal: loanAmount.toString(),
                                         loanTermFrequency: parseInt(loanTenure),
                                         loanTermFrequencyType: 2, // Months
@@ -717,7 +780,7 @@ const handleLoanFinalApproval = async (parsedData, res) => {
                                         numberOfRepayments: parseInt(loanTenure),
                                         repaymentEvery: 1,
                                         repaymentFrequencyType: 2, // Monthly
-                                        interestRatePerPeriod: 24, // 24% per year (matching product config)
+                                        interestRatePerPeriod: bookingInterestRate,
                                         interestRateFrequencyType: 3, // Per year
                                         amortizationType: 1, // Equal installments
                                         interestType: 0, // Declining balance

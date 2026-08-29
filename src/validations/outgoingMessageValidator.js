@@ -43,6 +43,10 @@ function validateOutgoingMessageDetails(messageType, parsedMessageDetails) {
       isValid: false,
       errorCode: '8001',
       description: `MessageDetails validation failed for ${messageType}: ${error.details.map((d) => d.message).join('; ')}`,
+      // Individual field-level messages (e.g. "\"ApplicationNumber\" is not allowed to be
+      // empty") - added for the validate-only endpoint's per-field error list, additive to
+      // the existing isValid/errorCode/description shape every other caller already uses.
+      errors: error.details.map((d) => d.message),
     };
   }
 

@@ -57,7 +57,12 @@ const LOAN_CONSTANTS = {
   ERROR_CODES: {
     NOT_ELIGIBLE: '8014',       // "Invalid code, mismatch of supplied code on information and header"
     INTERNAL_ERROR: '8012',     // "Request cannot be completed at this time, try later"
-    INVALID_REQUEST: '8001'     // "Required header is not given"
+    INVALID_REQUEST: '8001',    // "Required header is not given"
+    // "Invalid product code" per Utumishi spec. NOT '8018' - that literal is already used
+    // by loanRestructureAffordabilityHandler.js for an unrelated "unable to calculate
+    // restructure terms" condition; '8019' avoids the collision (confirmed unused anywhere
+    // else in this codebase and not assigned any other meaning in the ESS API spec doc).
+    INVALID_PRODUCT: '8019'
   },
 
   // ===== TEST IDENTIFIERS =====

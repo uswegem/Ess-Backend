@@ -39,14 +39,22 @@ const handleLoanChargesRequest = async (parsedData, res) => {
         // Determine affordability type based on presence of RequestedAmount
         const affordabilityType = (requestedAmount === null || requestedAmount === 0) ? 'REVERSE' : 'FORWARD';
 
-        // Set interest rate from constants
-        const interestRate = LOAN_CONSTANTS.DEFAULT_INTEREST_RATE;
+        // Tenant-scoped product lookup - source of the calculation rates AND the "quoted"
+        // snapshot written onto the LoanMapping below (so apiController.js's actual MIFOS
+        // loan-creation step can book the loan at the same rate that was quoted here,
+        // instead of a hardcoded value - see LoanMapping.quotedInterestRate etc.).
+        // No LOAN_CONSTANTS fallback - a missing/inactive product throws (caught below,
+        // returned as an explicit 8019 error response) rather than silently calculating
+        // off a global default.
+        const quotedProductCode = messageDetails.ProductCode || '17';
+        const { product: matchedProduct, interestRate, processingFeeRate, insuranceRate, otherCharges: otherChargesAmount, maxTenure } =
+            await loanUtils.resolveProductForCalculation(quotedProductCode);
 
         // Set defaults and validate tenure
         if (requestedTenure === null || requestedTenure === 0) {
             if (affordabilityType === 'FORWARD') {
-                requestedTenure = LOAN_CONSTANTS.DEFAULT_TENURE;
-                logger.info(`Tenure not provided but RequestedAmount >0, defaulting to default tenure: ${requestedTenure} months`);
+                requestedTenure = maxTenure;
+                logger.info(`Tenure not provided but RequestedAmount >0, defaulting to product's max tenure: ${requestedTenure} months`);
             } else {
                 requestedTenure = null; // Will be determined by reverse calculation
                 logger.info(`Tenure not provided for reverse calculation, will optimize`);
@@ -56,9 +64,9 @@ const handleLoanChargesRequest = async (parsedData, res) => {
         // Validate retirement if tenure is set
         if (requestedTenure !== null) {
             const retirementMonthsLeft = loanUtils.calculateMonthsUntilRetirement(messageDetails.RetirementDate);
-            requestedTenure = loanUtils.validateRetirementAge(requestedTenure, retirementMonthsLeft);
+            requestedTenure = loanUtils.validateRetirementAge(requestedTenure, retirementMonthsLeft, { maxTenure });
             if (!requestedTenure || requestedTenure <= 0) {
-                requestedTenure = LOAN_CONSTANTS.DEFAULT_TENURE;
+                requestedTenure = maxTenure;
                 logger.info(`Tenure adjusted for retirement: ${requestedTenure} months`);
             }
         }
@@ -120,13 +128,13 @@ const handleLoanChargesRequest = async (parsedData, res) => {
                 // For reverse calculation, optimize tenure to maximize eligible amount
                 // Try different tenures and find the one that gives maximum loan amount
                 let maxEligibleAmount = 0;
-                let optimalTenure = LOAN_CONSTANTS.DEFAULT_TENURE;
+                let optimalTenure = maxTenure;
                 let optimalMonthlyReturn = desirableEMI;
 
                 // Generate tenure options in 12-month increments up to this tenant's
-                // configured cap (falls back to the global default when no tenant
-                // context is resolved, e.g. legacy/untenanted requests).
-                const maxTenureMonths = getActiveTenantContext()?.maxTenureMonths || LOAN_CONSTANTS.MAX_TENURE;
+                // configured cap (falls back to the matched product's own maxTenure when
+                // no tenant-level override is resolved, e.g. legacy/untenanted requests).
+                const maxTenureMonths = getActiveTenantContext()?.maxTenureMonths || maxTenure;
                 const possibleTenures = [];
                 for (let t = 12; t <= maxTenureMonths; t += 12) {
                     possibleTenures.push(t);
@@ -144,7 +152,7 @@ const handleLoanChargesRequest = async (parsedData, res) => {
                 requestedTenure = optimalTenure;
                 logger.info(`Optimized tenure for reverse calculation: ${requestedTenure} months, MaxEligibleAmount: ${maxEligibleAmount}`);
             } else {
-                requestedTenure = LOAN_CONSTANTS.DEFAULT_TENURE;
+                requestedTenure = maxTenure;
             }
         }
 
@@ -160,9 +168,8 @@ const handleLoanChargesRequest = async (parsedData, res) => {
             
             // Step 1: Calculate what gross amount would be needed to achieve the requested net amount
             // Formula: GrossAmount = NetAmount / (1 - totalFeeRate)
-            const totalFeeRate = (LOAN_CONSTANTS?.ADMIN_FEE_RATE || 0.02) + (LOAN_CONSTANTS?.INSURANCE_RATE || 0.015);
-            const otherChargesAmount = LOAN_CONSTANTS?.OTHER_CHARGES || 50000;
-            
+            const totalFeeRate = processingFeeRate + insuranceRate;
+
             // Calculate required gross amount: (RequestedNet + OtherCharges) / (1 - percentageFees)
             const requiredGrossAmount = (requestedAmount + otherChargesAmount) / (1 - totalFeeRate);
             
@@ -200,7 +207,7 @@ const handleLoanChargesRequest = async (parsedData, res) => {
         eligibleAmount = Math.max(eligibleAmount, MIN_LOAN_AMOUNT);
 
         // Calculate charges modularly using eligibleAmount
-        const charges = loanCalculations.calculateCharges(eligibleAmount);
+        const charges = loanCalculations.calculateCharges(eligibleAmount, processingFeeRate, insuranceRate, otherChargesAmount);
         const totalProcessingFees = charges.processingFee;
         const totalInsurance = charges.insurance;
         const otherCharges = charges.otherCharges;
@@ -259,7 +266,26 @@ const handleLoanChargesRequest = async (parsedData, res) => {
                 }
 
                 if (mapping) {
+                    // Snapshot the quoted rates onto the mapping so apiController.js's actual
+                    // MIFOS loan-creation step can book at what was quoted here, not a fresh
+                    // (possibly since-changed) Product lookup or a hardcoded value.
+                    // resolveProductForCalculation() above throws (caught by this handler's
+                    // outer try/catch, response never reaches here) when no product matches -
+                    // so by the time this code runs, matchedProduct is always a real record.
+                    // Runs on every charges request for this mapping (new or existing), so a
+                    // repeat request always refreshes to the latest quote.
+                    const quoteSnapshot = {
+                        quotedMifosProductId: matchedProduct.mifosProductId,
+                        quotedInterestRate: matchedProduct.interestRate,
+                        quotedProcessingFee: matchedProduct.processingFee,
+                        quotedInsurance: matchedProduct.insurance,
+                        quotedOtherCharges: matchedProduct.otherCharges,
+                        quotedAt: new Date()
+                    };
+
                     await LoanMappingService.updateStatus(mapping.essApplicationNumber, mapping.status, {
+                        ...quoteSnapshot,
+                        totalAmountToPay: totalAmountToPay,
                         metadata: {
                             ...(mapping.metadata || {}),
                             chargesRequests: [
@@ -396,7 +422,10 @@ const handleLoanChargesRequest = async (parsedData, res) => {
             trackLoanError('processing_error', header?.MessageType || 'unknown');
         }
 
-        return sendErrorResponse(res, '8012', error.message, 'xml', parsedData);
+        // ApplicationException (e.g. resolveProductForCalculation's "no matching product")
+        // carries its own specific errorCode - use it instead of the generic 8012 so the
+        // caller gets a meaningful reason rather than a blanket "try later".
+        return sendErrorResponse(res, error.errorCode || '8012', error.message, 'xml', parsedData);
     }
 };
 

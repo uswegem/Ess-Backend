@@ -35,10 +35,23 @@ describe('LoanCalculations core', () => {
 
   test('calculateCharges returns object with fees', () => {
     const principal = 1_000_000;
-    const charges = LoanCalculations.calculateCharges(principal);
+    // adminFeeRate/insuranceRate/otherCharges are now required params (no internal
+    // LOAN_CONSTANTS default) - passed explicitly here, matching how every real caller
+    // now sources them from a tenant-scoped Product record via
+    // loanUtils.resolveProductForCalculation(). See docs/KNOWN_GAPS.md - this assertion
+    // could not be run against a live jest install in the deployed environment, only
+    // manually traced/node -c checked; verify in an environment with tests/ deployed.
+    const adminFeeRate = 0.02;
+    const insuranceRate = 0.0075;
+    const otherCharges = 50000;
+    const charges = LoanCalculations.calculateCharges(principal, adminFeeRate, insuranceRate, otherCharges);
     expect(charges.processingFee).toBeGreaterThan(0);
     expect(charges.insurance).toBeGreaterThan(0);
     expect(charges.otherCharges).toBeDefined();
+  });
+
+  test('calculateCharges throws when rate params are omitted (no silent LOAN_CONSTANTS fallback)', () => {
+    expect(() => LoanCalculations.calculateCharges(1_000_000)).toThrow();
   });
 
   test('amortizationSchedule sums correctly', async () => {

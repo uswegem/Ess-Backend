@@ -4,7 +4,8 @@ const { sendErrorResponse } = require('../../utils/responseUtils');
 const { sendCallback } = require('../../utils/callbackUtils');
 const { getMessageId } = require('../../utils/messageIdGenerator');
 const LOAN_CONSTANTS = require('../../utils/loanConstants');
-const { generateLoanNumber, generateFSPReferenceNumber } = require('../../utils/loanUtils');
+const loanUtils = require('../../utils/loanUtils');
+const { generateLoanNumber, generateFSPReferenceNumber } = loanUtils;
 const LoanMappingService = require('../../services/loanMappingService');
 
 /**
@@ -88,19 +89,52 @@ const handleTopUpOfferRequest = async (parsedData, res) => {
         setTimeout(async () => {
             try {
                 logger.info('⏰ Sending delayed LOAN_INITIAL_APPROVAL_NOTIFICATION callback for TOP_UP_OFFER_REQUEST...');
-                
+
+                // Tenant-scoped product lookup - source of the calculation rates. No
+                // LOAN_CONSTANTS fallback. The ACK for this message was already sent
+                // synchronously before this setTimeout ran, so a missing/inactive product
+                // here is recorded as LoanMapping.status='FAILED' with an explicit reason -
+                // never a silently-substituted default, and never a callback promising an
+                // offer that was never actually calculated from a real product.
+                let productRates;
+                try {
+                    productRates = await loanUtils.resolveProductForCalculation(messageDetails.ProductCode);
+                } catch (productError) {
+                    logger.error(`❌ Product resolution failed for TOP_UP_OFFER_REQUEST: ${productError.message}`);
+                    try {
+                        await LoanMappingService.createInitialMapping(
+                            messageDetails.ApplicationNumber,
+                            messageDetails.CheckNumber,
+                            generateFSPReferenceNumber(),
+                            {
+                                productCode: messageDetails.ProductCode || '17',
+                                requestedAmount: parseFloat(messageDetails.RequestedAmount) || 0,
+                                tenure: parseInt(messageDetails.Tenure) || 0,
+                                status: 'FAILED',
+                                metadata: {
+                                    failureReason: productError.message,
+                                    failedAt: new Date().toISOString()
+                                }
+                            }
+                        );
+                    } catch (mappingError) {
+                        logger.error('❌ Error recording FAILED mapping for TOP_UP_OFFER_REQUEST product resolution failure:', mappingError);
+                    }
+                    return; // Do not send an approval callback for an offer that was never calculated
+                }
+                const { interestRate, otherCharges: otherChargesAmount, maxTenure } = productRates;
+
                 // Generate loan details for top-up (use similar logic to LOAN_OFFER_REQUEST)
                 const loanAmount = parseFloat(messageDetails.RequestedAmount) || LOAN_CONSTANTS.MIN_LOAN_AMOUNT;
-                const interestRate = 24.0; // 24% per annum (same as regular loans)
-                const tenure = parseInt(messageDetails.Tenure) || LOAN_CONSTANTS.MAX_TENURE;
-                
+                const tenure = parseInt(messageDetails.Tenure) || maxTenure;
+
                 // Calculate total amount to pay
                 const totalInterestRateAmount = (loanAmount * interestRate * tenure) / (12 * 100);
                 const totalAmountToPay = loanAmount + totalInterestRateAmount;
-                const otherCharges = LOAN_CONSTANTS?.OTHER_CHARGES || 50000;
+                const otherCharges = otherChargesAmount;
                 const loanNumber = generateLoanNumber();
                 const fspReferenceNumber = generateFSPReferenceNumber();
-                
+
                 // Create/update loan mapping with approval details
                 try {
                     logger.info('🔄 Creating initial loan mapping...', {
@@ -123,7 +157,13 @@ const handleTopUpOfferRequest = async (parsedData, res) => {
                             interestRate: interestRate,
                             tenure: tenure,
                             otherCharges: otherCharges,
-                            status: 'INITIAL_APPROVAL_SENT'
+                            status: 'INITIAL_APPROVAL_SENT',
+                            quotedMifosProductId: productRates.product.mifosProductId,
+                            quotedInterestRate: interestRate,
+                            quotedProcessingFee: productRates.product.processingFee,
+                            quotedInsurance: productRates.product.insurance,
+                            quotedOtherCharges: productRates.product.otherCharges,
+                            quotedAt: new Date()
                         }
                     );
                     logger.info('✅ Created loan mapping for top-up offer', { mappingId: mapping._id });

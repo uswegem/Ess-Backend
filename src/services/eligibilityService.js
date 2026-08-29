@@ -25,16 +25,29 @@ class EligibilityService {
 
     try {
       const requestedAmount = loanOfferDTO.loanAmount || LOAN_CONSTANTS.DEFAULT_LOAN_AMOUNT;
-      const tenure = loanOfferDTO.tenure || LOAN_CONSTANTS.DEFAULT_TENURE;
+
+      // Product parameters must come from the caller's tenant-scoped Product lookup
+      // (e.g. loanUtils.resolveProductForCalculation) - no fallback to LOAN_CONSTANTS or
+      // any other global default. A caller passing an incomplete productDetails is a bug
+      // upstream, not something to silently paper over here.
+      const productDetails = loanOfferDTO.productDetails;
+      if (!productDetails || productDetails.interestRate === undefined || productDetails.maxPrincipal === undefined ||
+          productDetails.minPrincipal === undefined || productDetails.maxNumberOfRepayments === undefined ||
+          productDetails.adminFeeRate === undefined || productDetails.insuranceRate === undefined) {
+        throw new ApplicationException(
+          LOAN_CONSTANTS.ERROR_CODES.INVALID_PRODUCT,
+          'getOffer() requires a complete productDetails object (interestRate, maxPrincipal, minPrincipal, maxNumberOfRepayments, adminFeeRate, insuranceRate) - no LOAN_CONSTANTS fallback'
+        );
+      }
+
+      const tenure = loanOfferDTO.tenure || productDetails.maxNumberOfRepayments;
       const affordabilityType = loanOfferDTO.affordabilityType || 'FORWARD';
 
-      // Extract product parameters with fallback to constants
-      const productDetails = loanOfferDTO.productDetails || {};
-      const interestRate = productDetails.interestRate || LOAN_CONSTANTS.DEFAULT_INTEREST_RATE;
-      const maxPrincipal = productDetails.maxPrincipal || LOAN_CONSTANTS.MAX_LOAN_AMOUNT;
-      const minPrincipal = productDetails.minPrincipal || LOAN_CONSTANTS.MIN_LOAN_AMOUNT;
-      const maxTenure = productDetails.maxNumberOfRepayments || LOAN_CONSTANTS.MAX_TENURE;
-      
+      const interestRate = productDetails.interestRate;
+      const maxPrincipal = productDetails.maxPrincipal;
+      const minPrincipal = productDetails.minPrincipal;
+      const maxTenure = productDetails.maxNumberOfRepayments;
+
       // Validate against minimum loan amount
       if (loanOfferDTO.requestedAmount && loanOfferDTO.requestedAmount < minPrincipal) {
         throw new ApplicationException(
@@ -47,8 +60,7 @@ class EligibilityService {
         interestRate,
         maxPrincipal,
         minPrincipal,
-        maxTenure,
-        source: productDetails.interestRate ? 'MIFOS' : 'CONSTANTS'
+        maxTenure
       });
 
       let adjustedLoanAmount;
@@ -92,7 +104,7 @@ class EligibilityService {
       // Ensure all values are valid numbers (not NaN or undefined)
       const safeCalculatedEMI = isNaN(calculatedEMI) || !calculatedEMI ? 0 : Number(calculatedEMI);
       const safeAdjustedLoanAmount = isNaN(adjustedLoanAmount) || !adjustedLoanAmount ? 0 : Number(adjustedLoanAmount);
-      const safeTenure = isNaN(tenure) || !tenure ? LOAN_CONSTANTS.DEFAULT_TENURE : Number(tenure);
+      const safeTenure = isNaN(tenure) || !tenure ? maxTenure : Number(tenure);
       
       // Calculate total interest amount safely
       const totalInterest = (safeCalculatedEMI * safeTenure) - safeAdjustedLoanAmount;
@@ -109,9 +121,9 @@ class EligibilityService {
             maximumTerm: maxTenure
           },
           totalInterestAmount: safeTotalInterest,
-          adminFee: safeAdjustedLoanAmount * (productDetails.adminFeeRate || LOAN_CONSTANTS.ADMIN_FEE_RATE),
+          adminFee: safeAdjustedLoanAmount * productDetails.adminFeeRate,
           insurance: {
-            oneTimeAmount: safeAdjustedLoanAmount * (productDetails.insuranceRate || LOAN_CONSTANTS.INSURANCE_RATE)
+            oneTimeAmount: safeAdjustedLoanAmount * productDetails.insuranceRate
           },
           bpi: 0, // Bank Processing Fee
           maxEligibleAmount: maxPrincipal,
