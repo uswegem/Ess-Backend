@@ -79,8 +79,15 @@ app.get('/health', (req, res) => {
 });
 const PORT = process.env.PORT || 3002;
 
-// Connect to MongoDB
-connectDB();
+// Connect to MongoDB before serving traffic
+(async () => {
+    try {
+        await connectDB();
+    } catch (error) {
+        logger.error('MongoDB connection failed during startup', { error: error.message });
+        process.exit(1);
+    }
+})();
 
 // ========== MIDDLEWARE ORDER ==========
 
@@ -315,6 +322,9 @@ app.use('/api/v1/loan-actions', loanActionsRoutes);
 const mifosAdminRoutes = require('./src/routes/mifosAdmin');
 app.use('/api/v1/mifos', mifosAdminRoutes);
 
+const miracoreRoutes = require('./src/routes/miracore');
+app.use('/api/v1/miracore', miracoreRoutes);
+
 // Circuit breaker monitoring routes
 const circuitBreakerRoutes = require('./src/routes/circuitBreaker');
 app.use('/api/v1/circuit-breaker', circuitBreakerRoutes);
@@ -452,43 +462,71 @@ module.exports = app;
 
 // Only start server if not in test mode
 if (require.main === module || process.env.NODE_ENV !== 'test') {
-  // Create server with proper error handling
-  const server = app.listen(PORT, async () => {
+  const startServer = async () => {
     try {
-        logger.info(`Miracore Backend running on port ${PORT}`);
-        logger.info(`Supports: XML & JSON`);
-        logger.info(`Authentication: Enabled`);
-        logger.info(`Database: MongoDB`);
-        logger.info(`Initial Super Admin: superadmin / SuperAdmin123!`);
-        logger.info(`Digital signature: ${process.env.PRIVATE_KEY_PATH ? 'Enabled' : 'Disabled'}`);
-        
-        // Write PID file for process management
-        const fs = require('fs');
-        fs.writeFileSync('server.pid', process.pid.toString());
+        await connectDB();
 
-        // Verify database connection
-        await new Promise((resolve, reject) => {
-            const mongoose = require('mongoose');
-            if (mongoose.connection.readyState === 1) {
-                resolve();
-            } else {
-                mongoose.connection.once('connected', resolve);
-                mongoose.connection.once('error', reject);
+        const server = app.listen(PORT, async () => {
+            logger.info(`Miracore Backend running on port ${PORT}`);
+            logger.info(`Supports: XML & JSON`);
+            logger.info(`Authentication: Enabled`);
+            logger.info(`Database: MongoDB`);
+            logger.info(`Initial Super Admin: superadmin / SuperAdmin123!`);
+            logger.info(`Digital signature: ${process.env.PRIVATE_KEY_PATH ? 'Enabled' : 'Disabled'}`);
+            
+            const fs = require('fs');
+            fs.writeFileSync('server.pid', process.pid.toString());
+            logger.info('✅ Server ready and database connected');
+            
+            if (process.send) {
+                process.send('ready');
+                logger.info('📡 Sent ready signal to PM2');
             }
         });
 
-        logger.info('✅ Server ready and database connected');
-        
-        // Signal PM2 that app is ready (for cluster mode)
-        if (process.send) {
-            process.send('ready');
-            logger.info('📡 Sent ready signal to PM2');
-        }
+        server.on('error', (err) => {
+            logger.error('❌ Server failed to start:', err.message);
+            if (err.code === 'EADDRINUSE') {
+                logger.error(`Port ${PORT} is already in use. Trying to terminate existing process...`);
+                try {
+                    const fs = require('fs');
+                    if (fs.existsSync('server.pid')) {
+                        const pid = parseInt(fs.readFileSync('server.pid', 'utf8'));
+                        if (pid) {
+                            process.kill(pid, 'SIGTERM');
+                            logger.info(`Terminated process ${pid}`);
+                            startServer();
+                        }
+                    }
+                } catch (e) {
+                    logger.error('Failed to terminate existing process:', e.message);
+                }
+            }
+            process.exit(1);
+        });
+
+        process.on('SIGTERM', async () => {
+            logger.info('SIGTERM received, shutting down gracefully');
+            server.close(async () => {
+                logger.info('HTTP server closed');
+                process.exit(0);
+            });
+        });
+
+        process.on('SIGINT', async () => {
+            logger.info('SIGINT received, shutting down gracefully');
+            server.close(async () => {
+                logger.info('HTTP server closed');
+                process.exit(0);
+            });
+        });
     } catch (error) {
         logger.error('❌ Error during server startup:', error);
         process.exit(1);
     }
-}).on('error', (err) => {
+  };
+
+  startServer();
     logger.error('❌ Server failed to start:', err.message);
     if (err.code === 'EADDRINUSE') {
         logger.error(`Port ${PORT} is already in use. Trying to terminate existing process...`);

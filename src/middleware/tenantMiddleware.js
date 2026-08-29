@@ -23,7 +23,8 @@ const PUBLIC_PATH_PREFIXES = [
 
 const TENANT_OPTIONAL_PREFIXES = [
   '/api/v1/tenants',
-  '/api/v1/onboarding'
+  '/api/v1/onboarding',
+  '/api/v1/miracore'
 ];
 
 // Server-to-server routes called directly by external systems (e.g. ESS UTUMISHI)

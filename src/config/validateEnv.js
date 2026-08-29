@@ -37,7 +37,18 @@ const optionalEnvVars = [
   'TENANT_ENFORCEMENT',
   'CBS_TIMEOUT_MS',
   'API_TIMEOUT',
-  'SKIP_MIFOS_ACTIVATION_CHECK'
+  'SKIP_MIFOS_ACTIVATION_CHECK',
+  'MIRACORE_RUNTIME_HOST',
+  'MIRACORE_RUNTIME_PORT',
+  'MIRACORE_RUNTIME_BASE_URL',
+  'MIRACORE_RUNTIME_API_KEY',
+  'MIRACORE_ALLOWED_HOSTS',
+  'MIRACORE_PORTAL_API_KEY',
+  'RUNTIME_DB_HOST',
+  'RUNTIME_DB_PORT',
+  'RUNTIME_DB_NAME',
+  'RUNTIME_DB_USER',
+  'RUNTIME_DB_PASSWORD'
 ];
 
 /**
@@ -147,6 +158,9 @@ function logEnvironmentConfig() {
     logLevel: process.env.LOG_LEVEL || 'info',
     legacyTenantId: process.env.LEGACY_TENANT_ID || 'legacy-zedone',
     tenantEnforcement: process.env.TENANT_ENFORCEMENT || 'false',
+    runtimeHost: process.env.MIRACORE_RUNTIME_HOST || '102.204.1.22',
+    runtimePort: process.env.MIRACORE_RUNTIME_PORT || 3002,
+    runtimeAllowedHosts: process.env.MIRACORE_ALLOWED_HOSTS || 'localhost,127.0.0.1,102.204.1.22',
     // Never log sensitive values like passwords, secrets, or keys
   });
 }

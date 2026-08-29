@@ -1,6 +1,8 @@
 const mongoose = require('mongoose');
 const logger = require('../utils/logger');
 
+let fallbackMongoServer = null;
+
 // Enable query performance monitoring for development
 if (process.env.NODE_ENV === 'development') {
   mongoose.set('debug', (collectionName, method, query, doc) => {
@@ -14,33 +16,59 @@ if (process.env.NODE_ENV === 'development') {
 }
 
 const connectDB = async () => {
+  if (mongoose.connection.readyState === 1) {
+    return mongoose.connection;
+  }
+
+  const options = {
+    maxPoolSize: 50,
+    minPoolSize: 10,
+    socketTimeoutMS: 45000,
+    serverSelectionTimeoutMS: 5000,
+    heartbeatFrequencyMS: 10000,
+  };
+
+  const uri = process.env.MONGODB_URI || 'mongodb://localhost:27017/miracore';
+
   try {
-    // Optimized connection options for production
-    const options = {
-      maxPoolSize: 50,              // Up from default 5 - better concurrent handling
-      minPoolSize: 10,              // Maintain minimum connections
-      socketTimeoutMS: 45000,       // Socket timeout
-      serverSelectionTimeoutMS: 5000,
-      heartbeatFrequencyMS: 10000   // Health check frequency
-    };
-
-    const conn = await mongoose.connect(
-      process.env.MONGODB_URI || 'mongodb://localhost:27017/miracore',
-      options
-    );
-
+    const conn = await mongoose.connect(uri, options);
     logger.info(`MongoDB Connected: ${conn.connection.host}`, {
       database: conn.connection.name,
-      poolSize: options.maxPoolSize
+      poolSize: options.maxPoolSize,
     });
-    
-    // Create initial super admin if doesn't exist
     await createInitialSuperAdmin();
-    
+    return conn;
   } catch (error) {
-    logger.error('MongoDB connection error', { error: error.message, stack: error.stack });
-    logger.info('Continuing without database connection for testing...');
-    // process.exit(1); // Commented out for testing
+    if (process.env.NODE_ENV === 'production' && process.env.ALLOW_MONGO_FALLBACK !== 'true') {
+      logger.error('MongoDB connection error', { error: error.message, stack: error.stack });
+      throw error;
+    }
+
+    logger.warn('MongoDB host unavailable, starting embedded MongoMemoryServer fallback', {
+      uri,
+      error: error.message,
+    });
+
+    try {
+      const { MongoMemoryServer } = require('mongodb-memory-server');
+      fallbackMongoServer = await MongoMemoryServer.create();
+      const fallbackUri = fallbackMongoServer.getUri();
+      const conn = await mongoose.connect(fallbackUri, options);
+
+      logger.info('Embedded MongoMemoryServer connected', {
+        host: conn.connection.host,
+        database: conn.connection.name,
+      });
+
+      await createInitialSuperAdmin();
+      return conn;
+    } catch (fallbackError) {
+      logger.error('Failed to connect to MongoDB and fallback server', {
+        error: fallbackError.message,
+        stack: fallbackError.stack,
+      });
+      throw fallbackError;
+    }
   }
 };
 
