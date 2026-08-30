@@ -27,6 +27,10 @@ const TENANT_OPTIONAL_PREFIXES = [
   '/api/v1/miracore'
 ];
 
+const PLATFORM_ADMIN_PREFIXES = [
+  '/api/v1/miracore'
+];
+
 // Server-to-server routes called directly by external systems (e.g. ESS UTUMISHI)
 // that have no way to present a tenant API key or JWT. These always resolve to
 // the legacy tenant, regardless of TENANT_ENFORCEMENT, instead of 403ing.
@@ -42,6 +46,11 @@ function isPublicRoute(req) {
 function isTenantOptionalRoute(req) {
   const path = req.path || '';
   return TENANT_OPTIONAL_PREFIXES.some((prefix) => path === prefix || path.startsWith(`${prefix}/`));
+}
+
+function isPlatformAdminRoute(req) {
+  const path = req.path || '';
+  return PLATFORM_ADMIN_PREFIXES.some((prefix) => path === prefix || path.startsWith(`${prefix}/`));
 }
 
 function isLegacyFallbackAlwaysRoute(req) {
@@ -155,7 +164,7 @@ async function validateTenantSubscription(tenantContext) {
 
 async function attachTenantToRequest(req, res, next) {
   try {
-    if (isPublicRoute(req)) {
+    if (isPublicRoute(req) || isPlatformAdminRoute(req)) {
       return next();
     }
 
@@ -219,6 +228,7 @@ async function resolveTenantMembership(userId, tenantId) {
 module.exports = {
   isPublicRoute,
   isTenantOptionalRoute,
+  isPlatformAdminRoute,
   isLegacyFallbackAlwaysRoute,
   extractTenantFromToken,
   extractTenantFromApiKey,
