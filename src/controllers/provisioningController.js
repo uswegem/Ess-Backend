@@ -1,26 +1,29 @@
 const { sendSuccess, sendError } = require('../utils/apiResponse');
 const {
-  createMiracoreTenant,
-  listMiracoreTenants,
-  getMiracoreTenant,
-  updateMiracoreTenant,
-  provisionMiracoreTenant,
-  bootstrapMiracoreTenant,
-  activateMiracoreTenant,
-  MiracoreTenantServiceError,
-} = require('../services/miracoreTenantService');
+  createProvisioningTenant,
+  listProvisioningTenants,
+  getProvisioningTenant,
+  updateProvisioningTenant,
+  provisionProvisioningTenant,
+  bootstrapProvisioningTenant,
+  activateProvisioningTenant,
+  ProvisioningTenantServiceError,
+} = require('../services/provisioningTenantService');
 
 function handleError(res, error) {
-  if (error instanceof MiracoreTenantServiceError) {
+  if (error instanceof ProvisioningTenantServiceError) {
     return sendError(res, error.statusCode, error.message, { code: error.code });
+  }
+  if (error.name === 'ValidationError') {
+    return sendError(res, 400, error.message, { code: 'VALIDATION_ERROR' });
   }
   return sendError(res, 500, 'Internal server error');
 }
 
-class MiracoreController {
+class ProvisioningController {
   static async list(req, res) {
     try {
-      const result = await listMiracoreTenants(req.query);
+      const result = await listProvisioningTenants(req.query);
       return sendSuccess(res, { data: { tenants: result.tenants }, pagination: result.pagination });
     } catch (error) {
       return handleError(res, error);
@@ -29,10 +32,10 @@ class MiracoreController {
 
   static async create(req, res) {
     try {
-      const tenant = await createMiracoreTenant(req.body, { createdBy: req.user?._id });
+      const tenant = await createProvisioningTenant(req.body, { createdBy: req.user?._id });
       return sendSuccess(res, {
         status: 201,
-        message: 'Miracore tenant created successfully',
+        message: 'Runtime provisioning tenant created successfully',
         data: { tenant: tenant.toSafeJSON() },
       });
     } catch (error) {
@@ -42,7 +45,7 @@ class MiracoreController {
 
   static async getById(req, res) {
     try {
-      const tenant = await getMiracoreTenant(req.params.tenantId);
+      const tenant = await getProvisioningTenant(req.params.tenantId);
       return sendSuccess(res, { data: { tenant: tenant.toSafeJSON() } });
     } catch (error) {
       return handleError(res, error);
@@ -51,8 +54,8 @@ class MiracoreController {
 
   static async update(req, res) {
     try {
-      const tenant = await updateMiracoreTenant(req.params.tenantId, req.body, { updatedBy: req.user?._id });
-      return sendSuccess(res, { message: 'Miracore tenant updated', data: { tenant: tenant.toSafeJSON() } });
+      const tenant = await updateProvisioningTenant(req.params.tenantId, req.body, { updatedBy: req.user?._id });
+      return sendSuccess(res, { message: 'Runtime provisioning tenant updated', data: { tenant: tenant.toSafeJSON() } });
     } catch (error) {
       return handleError(res, error);
     }
@@ -60,10 +63,10 @@ class MiracoreController {
 
   static async provision(req, res) {
     try {
-      const tenant = await provisionMiracoreTenant(req.params.tenantId);
+      const tenant = await provisionProvisioningTenant(req.params.tenantId, { actorUserId: req.user?._id });
       return sendSuccess(res, {
         status: 202,
-        message: 'Miracore provisioning started',
+        message: 'Runtime provisioning started',
         data: { tenant: tenant.toSafeJSON() },
       });
     } catch (error) {
@@ -73,9 +76,9 @@ class MiracoreController {
 
   static async bootstrap(req, res) {
     try {
-      const tenant = await bootstrapMiracoreTenant(req.params.tenantId, req.body || {});
+      const tenant = await bootstrapProvisioningTenant(req.params.tenantId, req.body || {}, { actorUserId: req.user?._id });
       return sendSuccess(res, {
-        message: 'Miracore bootstrap completed',
+        message: 'Runtime bootstrap completed',
         data: { tenant: tenant.toSafeJSON() },
       });
     } catch (error) {
@@ -85,9 +88,9 @@ class MiracoreController {
 
   static async activate(req, res) {
     try {
-      const tenant = await activateMiracoreTenant(req.params.tenantId);
+      const tenant = await activateProvisioningTenant(req.params.tenantId, { actorUserId: req.user?._id });
       return sendSuccess(res, {
-        message: 'Miracore tenant activated',
+        message: 'Runtime provisioning tenant activated',
         data: { tenant: tenant.toSafeJSON() },
       });
     } catch (error) {
@@ -96,4 +99,4 @@ class MiracoreController {
   }
 }
 
-module.exports = MiracoreController;
+module.exports = ProvisioningController;

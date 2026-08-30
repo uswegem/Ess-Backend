@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
+const { isAllowedRuntimeHost } = require('../utils/runtimeHostSecurity');
 
-const miracoreTenantSchema = new mongoose.Schema({
+const provisioningTenantSchema = new mongoose.Schema({
   tenantId: {
     type: String,
     required: true,
@@ -18,6 +19,12 @@ const miracoreTenantSchema = new mongoose.Schema({
     type: String,
     required: true,
     trim: true,
+    // Reject hosts outside the runtime-provisioning allowlist at write time —
+    // don't rely solely on the outbound client's call-time check.
+    validate: {
+      validator: (value) => isAllowedRuntimeHost(String(value).replace(/^https?:\/\//, '')),
+      message: (props) => `Runtime host '${props.value}' is not on the runtime-provisioning allowlist.`,
+    },
   },
   runtimePort: {
     type: Number,
@@ -73,9 +80,9 @@ const miracoreTenantSchema = new mongoose.Schema({
   },
 }, { timestamps: true });
 
-miracoreTenantSchema.index({ status: 1, createdAt: -1 });
+provisioningTenantSchema.index({ status: 1, createdAt: -1 });
 
-miracoreTenantSchema.methods.toSafeJSON = function toSafeJSON() {
+provisioningTenantSchema.methods.toSafeJSON = function toSafeJSON() {
   const obj = this.toObject();
   return {
     id: obj._id,
@@ -95,8 +102,8 @@ miracoreTenantSchema.methods.toSafeJSON = function toSafeJSON() {
   };
 };
 
-miracoreTenantSchema.methods.toJSON = function toJSON() {
+provisioningTenantSchema.methods.toJSON = function toJSON() {
   return this.toSafeJSON();
 };
 
-module.exports = mongoose.model('MiracoreTenant', miracoreTenantSchema);
+module.exports = mongoose.model('ProvisioningTenant', provisioningTenantSchema);

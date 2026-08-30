@@ -322,8 +322,8 @@ app.use('/api/v1/loan-actions', loanActionsRoutes);
 const mifosAdminRoutes = require('./src/routes/mifosAdmin');
 app.use('/api/v1/mifos', mifosAdminRoutes);
 
-const miracoreRoutes = require('./src/routes/miracore');
-app.use('/api/v1/miracore', miracoreRoutes);
+const runtimeProvisioningRoutes = require('./src/routes/runtimeProvisioning');
+app.use('/api/v1/runtime-provisioning', runtimeProvisioningRoutes);
 
 // Circuit breaker monitoring routes
 const circuitBreakerRoutes = require('./src/routes/circuitBreaker');

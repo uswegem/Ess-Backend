@@ -38,18 +38,19 @@ const optionalEnvVars = [
   'CBS_TIMEOUT_MS',
   'API_TIMEOUT',
   'SKIP_MIFOS_ACTIVATION_CHECK',
-  'MIRACORE_RUNTIME_HOST',
-  'MIRACORE_RUNTIME_PORT',
-  'MIRACORE_RUNTIME_BASE_URL',
-  'MIRACORE_RUNTIME_API_KEY',
-  'MIRACORE_ALLOWED_HOSTS',
-  'MIRACORE_PORTAL_API_KEY',
+  'RUNTIME_PROVISIONING_ENABLED',
+  'RUNTIME_PROVISIONING_ALLOWED_HOSTS',
   'RUNTIME_DB_HOST',
   'RUNTIME_DB_PORT',
   'RUNTIME_DB_NAME',
   'RUNTIME_DB_USER',
   'RUNTIME_DB_PASSWORD'
 ];
+
+// Required only when the runtime-provisioning feature is actually enabled —
+// checked separately below rather than unconditionally, since not every
+// deployment provisions tenants against a runtime host.
+const runtimeProvisioningEnvVars = ['RUNTIME_DB_HOST', 'RUNTIME_DB_USER', 'RUNTIME_DB_PASSWORD', 'RUNTIME_DB_NAME'];
 
 /**
  * Validate that all required environment variables are present
@@ -65,6 +66,18 @@ function validateEnvironment() {
   }
   
   logger.info('✅ All required environment variables present');
+
+  // Runtime-provisioning (the separate PostgreSQL-backed runtime host) is
+  // opt-in per deployment. When enabled, fail closed rather than letting
+  // runtimeSqlClient.js silently fall back to dev-grade defaults.
+  if (process.env.RUNTIME_PROVISIONING_ENABLED === 'true') {
+    const missingRuntime = runtimeProvisioningEnvVars.filter((key) => !process.env[key]);
+    if (missingRuntime.length > 0) {
+      const errorMsg = `❌ RUNTIME_PROVISIONING_ENABLED=true but missing required runtime-host variables: ${missingRuntime.join(', ')}`;
+      logger.error(errorMsg);
+      throw new Error(errorMsg);
+    }
+  }
   
   // Log optional variables status (for debugging)
   const presentOptional = optionalEnvVars.filter(key => process.env[key]);
@@ -158,9 +171,8 @@ function logEnvironmentConfig() {
     logLevel: process.env.LOG_LEVEL || 'info',
     legacyTenantId: process.env.LEGACY_TENANT_ID || 'legacy-zedone',
     tenantEnforcement: process.env.TENANT_ENFORCEMENT || 'false',
-    runtimeHost: process.env.MIRACORE_RUNTIME_HOST || '102.204.1.22',
-    runtimePort: process.env.MIRACORE_RUNTIME_PORT || 3002,
-    runtimeAllowedHosts: process.env.MIRACORE_ALLOWED_HOSTS || 'localhost,127.0.0.1,102.204.1.22',
+    runtimeProvisioningEnabled: process.env.RUNTIME_PROVISIONING_ENABLED === 'true',
+    runtimeProvisioningAllowedHosts: process.env.RUNTIME_PROVISIONING_ALLOWED_HOSTS || 'localhost,127.0.0.1,102.204.1.22',
     // Never log sensitive values like passwords, secrets, or keys
   });
 }

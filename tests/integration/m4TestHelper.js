@@ -5,7 +5,7 @@ const tenantRoutes = require('../../src/routes/tenants');
 const onboardingRoutes = require('../../src/routes/onboarding');
 const apiKeyRoutes = require('../../src/routes/apiKeys');
 const dashboardRoutes = require('../../src/routes/dashboard');
-const miracoreRoutes = require('../../src/routes/miracore');
+const runtimeProvisioningRoutes = require('../../src/routes/runtimeProvisioning');
 const { correlationMiddleware } = require('../../src/middleware/correlationMiddleware');
 const { attachTenantToRequest } = require('../../src/middleware/tenantMiddleware');
 const { auditMiddleware } = require('../../src/middleware/authMiddleware');
@@ -34,7 +34,7 @@ function buildM4TestApp() {
   app.use('/api/v1/onboarding', onboardingRoutes);
   app.use('/api/v1/tenants/:tenantId/api-keys', apiKeyRoutes);
   app.use('/api/v1/dashboard', dashboardRoutes);
-  app.use('/api/v1/miracore', miracoreRoutes);
+  app.use('/api/v1/runtime-provisioning', runtimeProvisioningRoutes);
   return app;
 }
 

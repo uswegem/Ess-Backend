@@ -1,5 +1,9 @@
+// Allowlist of hosts the portal is permitted to treat as "the runtime host"
+// for tenant provisioning. Deliberately does not include zedone.miracore.app
+// (the live, MySQL-backed Fineract instance) — provisioning must never be
+// able to target that instance, by accident or misconfiguration.
 function getAllowedRuntimeHosts() {
-  const raw = process.env.MIRACORE_ALLOWED_HOSTS || 'localhost,127.0.0.1,102.204.1.22';
+  const raw = process.env.RUNTIME_PROVISIONING_ALLOWED_HOSTS || 'localhost,127.0.0.1,102.204.1.22';
   return raw
     .split(',')
     .map((host) => String(host).trim().toLowerCase())
@@ -13,18 +17,7 @@ function isAllowedRuntimeHost(hostname = '') {
   return allowed.includes(normalized) || allowed.some((entry) => normalized === entry.replace(/^https?:\/\//, '').replace(/:\d+$/, ''));
 }
 
-function buildRuntimeRequestHeaders(config = {}) {
-  const defaultApiKey = process.env.MIRACORE_RUNTIME_API_KEY || process.env.MIRACORE_PORTAL_API_KEY || 'dev-runtime-key';
-  return {
-    'Content-Type': 'application/json',
-    'X-Miracore-Portal-Api-Key': config.apiKey || defaultApiKey,
-    'X-Miracore-Source': config.source || 'portal-host',
-    'X-Miracore-Request-Id': config.requestId || `portal-${Date.now()}`,
-  };
-}
-
 module.exports = {
   getAllowedRuntimeHosts,
   isAllowedRuntimeHost,
-  buildRuntimeRequestHeaders,
 };
