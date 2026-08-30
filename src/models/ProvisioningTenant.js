@@ -17,12 +17,14 @@ const provisioningTenantSchema = new mongoose.Schema({
   },
   runtimeHost: {
     type: String,
-    required: true,
     trim: true,
-    // Reject hosts outside the runtime-provisioning allowlist at write time —
-    // don't rely solely on the outbound client's call-time check.
+    default: '102.204.1.22',
+    // Descriptive only — actual provisioning goes over a fixed SSH target
+    // configured via RUNTIME_SSH_HOST, not this per-tenant field. Still
+    // validated against the allowlist so this record can never be mistaken
+    // for pointing at the live zedone.miracore.app Fineract instance.
     validate: {
-      validator: (value) => isAllowedRuntimeHost(String(value).replace(/^https?:\/\//, '')),
+      validator: (value) => !value || isAllowedRuntimeHost(String(value).replace(/^https?:\/\//, '')),
       message: (props) => `Runtime host '${props.value}' is not on the runtime-provisioning allowlist.`,
     },
   },

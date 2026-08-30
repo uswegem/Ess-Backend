@@ -24,12 +24,8 @@ describe('Runtime provisioning tenant module', () => {
       .post('/api/v1/runtime-provisioning/tenants')
       .set('Authorization', `Bearer ${token}`)
       .send({
-        tenantId: 'demo-tenant',
+        tenantId: 'demo_tenant',
         tenantName: 'Demo Tenant',
-        runtimeHost: '102.204.1.22',
-        runtimePort: 3002,
-        databaseName: 'demo_tenant_db',
-        schemaName: 'demo_tenant',
         appConfig: {
           defaultCurrency: 'TZS',
           emailProvider: 'sendgrid',
@@ -45,7 +41,7 @@ describe('Runtime provisioning tenant module', () => {
 
     expect(createRes.status).toBe(201);
     expect(createRes.body.success).toBe(true);
-    expect(createRes.body.data.tenant.tenantId).toBe('demo-tenant');
+    expect(createRes.body.data.tenant.tenantId).toBe('demo_tenant');
     expect(createRes.body.data.tenant.status).toBe('draft');
 
     const listRes = await request(app)
@@ -54,7 +50,16 @@ describe('Runtime provisioning tenant module', () => {
 
     expect(listRes.status).toBe(200);
     expect(listRes.body.data.tenants.length).toBeGreaterThanOrEqual(1);
-    expect(listRes.body.data.tenants[0].tenantId).toBe('demo-tenant');
+    expect(listRes.body.data.tenants[0].tenantId).toBe('demo_tenant');
+  });
+
+  it('rejects a tenantId that does not match the runtime host tenant-code format', async () => {
+    const res = await request(app)
+      .post('/api/v1/runtime-provisioning/tenants')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ tenantId: 'Not-A-Valid-Code!', tenantName: 'Bad Code Tenant' });
+
+    expect(res.status).toBe(400);
   });
 
   it('rejects a runtime host that is not on the provisioning allowlist', async () => {
@@ -62,7 +67,7 @@ describe('Runtime provisioning tenant module', () => {
       .post('/api/v1/runtime-provisioning/tenants')
       .set('Authorization', `Bearer ${token}`)
       .send({
-        tenantId: 'bad-host-tenant',
+        tenantId: 'bad_host_tenant',
         tenantName: 'Bad Host Tenant',
         runtimeHost: 'zedone.miracore.app',
       });
@@ -89,19 +94,5 @@ describe('Runtime provisioning tenant module', () => {
       .set('Authorization', `Bearer ${userToken}`);
 
     expect(res.status).toBe(403);
-  });
-
-  it('rejects bootstrap without an adminPassword', async () => {
-    await request(app)
-      .post('/api/v1/runtime-provisioning/tenants')
-      .set('Authorization', `Bearer ${token}`)
-      .send({ tenantId: 'no-pass-tenant', tenantName: 'No Pass Tenant', runtimeHost: '102.204.1.22' });
-
-    const res = await request(app)
-      .post('/api/v1/runtime-provisioning/tenants/no-pass-tenant/bootstrap')
-      .set('Authorization', `Bearer ${token}`)
-      .send({});
-
-    expect(res.status).toBe(400);
   });
 });

@@ -40,17 +40,18 @@ const optionalEnvVars = [
   'SKIP_MIFOS_ACTIVATION_CHECK',
   'RUNTIME_PROVISIONING_ENABLED',
   'RUNTIME_PROVISIONING_ALLOWED_HOSTS',
-  'RUNTIME_DB_HOST',
-  'RUNTIME_DB_PORT',
-  'RUNTIME_DB_NAME',
-  'RUNTIME_DB_USER',
-  'RUNTIME_DB_PASSWORD'
+  'RUNTIME_SSH_HOST',
+  'RUNTIME_SSH_USER',
+  'RUNTIME_SSH_KEY_PATH'
 ];
 
 // Required only when the runtime-provisioning feature is actually enabled —
 // checked separately below rather than unconditionally, since not every
-// deployment provisions tenants against a runtime host.
-const runtimeProvisioningEnvVars = ['RUNTIME_DB_HOST', 'RUNTIME_DB_USER', 'RUNTIME_DB_PASSWORD', 'RUNTIME_DB_NAME'];
+// deployment provisions tenants against a runtime host. Provisioning is
+// triggered by SSH-invoking the runtime host's own provision_tenant.sh
+// (restricted to a forced command on that end) — not a direct DB
+// connection, so no database credentials live in this app's config at all.
+const runtimeProvisioningEnvVars = ['RUNTIME_SSH_HOST', 'RUNTIME_SSH_USER', 'RUNTIME_SSH_KEY_PATH'];
 
 /**
  * Validate that all required environment variables are present
@@ -67,9 +68,9 @@ function validateEnvironment() {
   
   logger.info('✅ All required environment variables present');
 
-  // Runtime-provisioning (the separate PostgreSQL-backed runtime host) is
-  // opt-in per deployment. When enabled, fail closed rather than letting
-  // runtimeSqlClient.js silently fall back to dev-grade defaults.
+  // Runtime-provisioning (SSH-triggering provision_tenant.sh on the
+  // separate runtime host) is opt-in per deployment. When enabled, fail
+  // closed rather than silently skipping SSH config validation.
   if (process.env.RUNTIME_PROVISIONING_ENABLED === 'true') {
     const missingRuntime = runtimeProvisioningEnvVars.filter((key) => !process.env[key]);
     if (missingRuntime.length > 0) {
@@ -123,7 +124,7 @@ function validateEnvPatterns() {
   const fs = require('fs');
   const path = require('path');
   
-  const fileFields = ['PRIVATE_KEY_PATH', 'CERTIFICATE_PATH'];
+  const fileFields = ['PRIVATE_KEY_PATH', 'CERTIFICATE_PATH', 'RUNTIME_SSH_KEY_PATH'];
   fileFields.forEach(field => {
     if (process.env[field]) {
       const filePath = path.resolve(process.env[field]);

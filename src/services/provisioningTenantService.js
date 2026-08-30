@@ -1,14 +1,6 @@
-const bcrypt = require('bcryptjs');
 const ProvisioningTenant = require('../models/ProvisioningTenant');
 const AuditLog = require('../models/AuditLog');
-const {
-  ensureRuntimeDatabaseAndSchema,
-  executeRuntimeBootstrapSql,
-  markRuntimeTenantActive,
-} = require('../utils/runtimeSqlBootstrap');
-
-const BCRYPT_ROUNDS = 10; // matches src/utils/tenantSecretCrypto.js
-const MIN_PASSWORD_LENGTH = 6; // matches src/models/User.js password minlength
+const { provisionTenantViaSsh, TENANT_CODE_PATTERN } = require('../utils/runtimeSshClient');
 
 class ProvisioningTenantServiceError extends Error {
   constructor(message, statusCode = 400, code = 'PROVISIONING_TENANT_ERROR') {
@@ -18,12 +10,17 @@ class ProvisioningTenantServiceError extends Error {
   }
 }
 
-// Runtime host provisioning talks directly to the runtime host's own
-// Postgres instance (a genuinely separate, PostgreSQL-backed installation —
-// distinct from the live MySQL-backed zedone.miracore.app Fineract instance
-// that the rest of this app talks to via CBS_BASE_URL/MIFOS_*). There is no
-// assumed REST API on the runtime host; RUNTIME_DB_* config points straight
-// at its database.
+// Runtime-host tenant creation is owned by provision_tenant.sh, an existing,
+// already-hardened script on the runtime host that creates a Postgres role
+// (tenant_<code>) and database (fineract_tenant_<code>) with its own
+// idempotency, injection-guarding, and secret handling. The portal triggers
+// it over a restricted SSH connection rather than duplicating that logic —
+// see docs/RUNTIME_PROVISIONING.md for the full rationale.
+//
+// This intentionally does NOT run Liquibase migrations or register the
+// tenant in Fineract's own fineract_tenants table — that is real, separate,
+// currently-undesigned work. bootstrap/activate below say so explicitly
+// rather than faking success.
 
 async function logAudit({ action, description, actorUserId, tenantId, status, metadata }) {
   try {
@@ -68,6 +65,14 @@ async function listProvisioningTenants({ page = 1, limit = 20, status, search } 
 
 async function createProvisioningTenant(payload, { createdBy } = {}) {
   const tenantId = payload.tenantId || `tenant-${Date.now()}`;
+  if (!TENANT_CODE_PATTERN.test(tenantId)) {
+    throw new ProvisioningTenantServiceError(
+      `tenantId '${tenantId}' does not match the runtime host's tenant code format ${TENANT_CODE_PATTERN}`,
+      400,
+      'INVALID_TENANT_CODE'
+    );
+  }
+
   const existing = await ProvisioningTenant.findOne({ tenantId });
   if (existing) {
     throw new ProvisioningTenantServiceError('Provisioning tenant already exists', 409, 'DUPLICATE_PROVISIONING_TENANT');
@@ -123,30 +128,33 @@ async function updateProvisioningTenant(tenantId, payload, { updatedBy } = {}) {
   return tenant;
 }
 
-// Step 1 of 3: prove the runtime host's Postgres is reachable and stand up
-// the database/schema shell. Idempotent — re-provisioning a 'ready' tenant
-// is a no-op so a retried request doesn't re-run against live state.
+// The only step that actually does something on the runtime host: SSH in
+// and trigger provision_tenant.sh, which creates tenant_<code> (role) and
+// fineract_tenant_<code> (database). Idempotent — the script itself refuses
+// to touch an existing role/database, so re-running this after a partial
+// failure (e.g. a network blip) is safe.
 async function provisionProvisioningTenant(tenantId, { actorUserId } = {}) {
   const tenant = await getProvisioningTenant(tenantId);
-  const jobId = `provision-${tenantId}-${Date.now()}`;
 
   if (tenant.status === 'ready') {
     return tenant;
   }
 
   tenant.status = 'provisioning';
-  tenant.provisioningJob = { jobId, status: 'queued', startedAt: new Date() };
+  tenant.provisioningJob = {
+    jobId: `provision-${tenantId}-${Date.now()}`,
+    status: 'queued',
+    startedAt: new Date(),
+  };
   await tenant.save();
 
-  const result = await ensureRuntimeDatabaseAndSchema({
-    tenantId: tenant.tenantId,
-    databaseName: tenant.databaseName,
-    schemaName: tenant.schemaName,
-  });
+  const result = await provisionTenantViaSsh(tenant.tenantId);
 
   if (result.success) {
-    tenant.databaseName = result.databaseName;
-    tenant.schemaName = result.schemaName;
+    tenant.databaseName = `fineract_tenant_${tenant.tenantId}`;
+    // Not a schema in the Postgres sense here — the runtime host doesn't
+    // create one; kept only as the display name of the role provisioned.
+    tenant.schemaName = `tenant_${tenant.tenantId}`;
   }
 
   tenant.provisioningJob = {
@@ -164,103 +172,40 @@ async function provisionProvisioningTenant(tenantId, { actorUserId } = {}) {
     actorUserId,
     tenantId: tenant.tenantId,
     status: result.success ? 'success' : 'failed',
+    // stdout/stderr from provision_tenant.sh may include the role name but
+    // never a password (the script writes that straight to a root-only
+    // file on the runtime host and never prints it) — safe to log as-is,
+    // but never log the SSH private key or connection details.
     metadata: result.success ? undefined : { error: result.error },
   });
 
   return tenant;
 }
 
-// Step 2 of 3: create the runtime-host tables and the tenant's admin user.
-// The DDL uses ON CONFLICT DO NOTHING, so re-calling this after a partial
-// failure is safe rather than erroring on a duplicate key.
-async function bootstrapProvisioningTenant(tenantId, payload = {}, { actorUserId } = {}) {
-  const tenant = await getProvisioningTenant(tenantId);
-
-  if (!payload.adminPassword || String(payload.adminPassword).length < MIN_PASSWORD_LENGTH) {
-    throw new ProvisioningTenantServiceError(
-      `adminPassword is required and must be at least ${MIN_PASSWORD_LENGTH} characters`,
-      400,
-      'WEAK_ADMIN_PASSWORD'
-    );
-  }
-
-  const adminUsername = payload.adminUsername || `${tenant.tenantId}-admin`;
-  const adminEmail = payload.adminEmail || `${tenant.tenantId}@local.test`;
-  // The plaintext password is hashed immediately and never persisted or
-  // logged; only the hash is written to the runtime host's users table.
-  const adminPasswordHash = await bcrypt.hash(payload.adminPassword, BCRYPT_ROUNDS);
-
-  tenant.bootstrap = {
-    status: 'running',
-    startedAt: new Date(),
-    databaseCreated: false,
-    schemaApplied: false,
-    adminUserCreated: false,
-    adminUsername,
-    lastError: null,
-  };
-  await tenant.save();
-
-  const result = await executeRuntimeBootstrapSql({
-    tenantId: tenant.tenantId,
-    databaseName: tenant.databaseName,
-    schemaName: tenant.schemaName,
-    adminUsername,
-    adminEmail,
-    adminPasswordHash,
-  });
-
-  tenant.bootstrap = {
-    ...tenant.bootstrap,
-    status: result.success ? 'completed' : 'failed',
-    finishedAt: new Date(),
-    databaseCreated: Boolean(result.databaseCreated),
-    schemaApplied: Boolean(result.schemaApplied),
-    adminUserCreated: Boolean(result.adminUserCreated),
-    adminUsername: result.adminUsername || adminUsername,
-    lastError: result.success ? null : result.error,
-  };
-  tenant.status = result.success ? 'ready' : 'failed';
-  await tenant.save();
-
-  await logAudit({
-    action: 'runtime_tenant_bootstrap',
-    description: `Runtime bootstrap ${result.success ? 'succeeded' : 'failed'} for tenant: ${tenant.tenantId}`,
-    actorUserId,
-    tenantId: tenant.tenantId,
-    status: result.success ? 'success' : 'failed',
-    metadata: result.success ? { adminUsername } : { adminUsername, error: result.error },
-  });
-
-  return tenant;
+// NOT YET IMPLEMENTED. provision_tenant.sh only creates the Postgres role
+// and database — it deliberately does not run Liquibase migrations or
+// register the tenant in Fineract's own fineract_tenants table. Both are
+// required before a tenant is actually usable, and neither has a design
+// yet. Rather than fabricate schema/DDL here (the mistake in the original
+// version of this feature), this fails clearly so it can't be mistaken for
+// a completed step.
+async function bootstrapProvisioningTenant() {
+  throw new ProvisioningTenantServiceError(
+    'Runtime tenant bootstrap (Liquibase migrations + fineract_tenants registration) is not yet implemented — provision_tenant.sh only creates the role and database.',
+    501,
+    'BOOTSTRAP_NOT_IMPLEMENTED'
+  );
 }
 
-// Step 3 of 3: flip the tenant's row to active on the runtime host.
-// Idempotent — safe to retry.
-async function activateProvisioningTenant(tenantId, { actorUserId } = {}) {
-  const tenant = await getProvisioningTenant(tenantId);
-
-  const result = await markRuntimeTenantActive({
-    tenantId: tenant.tenantId,
-    schemaName: tenant.schemaName,
-  });
-
-  tenant.status = result.success ? 'ready' : 'failed';
-  if (result.success) {
-    tenant.bootstrap = { ...(tenant.bootstrap || {}), status: 'completed', finishedAt: new Date() };
-  }
-  await tenant.save();
-
-  await logAudit({
-    action: 'runtime_tenant_activate',
-    description: `Runtime activation ${result.success ? 'succeeded' : 'failed'} for tenant: ${tenant.tenantId}`,
-    actorUserId,
-    tenantId: tenant.tenantId,
-    status: result.success ? 'success' : 'failed',
-    metadata: result.success ? undefined : { error: result.error },
-  });
-
-  return tenant;
+// NOT YET IMPLEMENTED — see bootstrapProvisioningTenant above. A tenant
+// isn't meaningfully "active" in Fineract until bootstrap's remaining work
+// is designed and built.
+async function activateProvisioningTenant() {
+  throw new ProvisioningTenantServiceError(
+    'Runtime tenant activation is not yet implemented — depends on bootstrap (Liquibase migrations + fineract_tenants registration), which is not yet built.',
+    501,
+    'ACTIVATE_NOT_IMPLEMENTED'
+  );
 }
 
 module.exports = {
