@@ -4,15 +4,26 @@ const TenantUser = require('../models/TenantUser');
 const logger = require('../utils/logger');
 const { buildEssLoanSummary } = require('../utils/essLoanSummary');
 
+// SECURITY FIX: a caller-supplied ?tenantId= used to be honored unconditionally,
+// for ANY authenticated dashboard:read caller — which every tenant role has by
+// default. That meant any tenant user could view another tenant's real
+// Dashboard data just by supplying a different tenantId, with no ownership or
+// permission check at all. Now a caller-supplied tenantId is only honored for
+// callers with explicit cross-tenant read authority (platform admin, or the
+// tenants:read_all permission). Every other caller is always scoped to their
+// own req.tenant.tenantId (from their authenticated session), regardless of
+// what they pass in the query string.
 function resolveTenantFilter(req) {
-  if (req.query.tenantId) {
+  const ownTenantId = req.tenant?.tenantId || null;
+  const hasCrossTenantReadAccess = req.authContext?.isSuperAdmin
+    || req.user?.role === 'admin'
+    || Boolean(req.authContext?.permissions?.includes('tenants:read_all'));
+
+  if (req.query.tenantId && hasCrossTenantReadAccess) {
     return { tenantId: req.query.tenantId };
   }
-  if (req.tenant?.tenantId) {
-    return { tenantId: req.tenant.tenantId };
-  }
-  if (req.authContext?.isSuperAdmin && req.query.allTenants === 'true') {
-    return {};
+  if (ownTenantId) {
+    return { tenantId: ownTenantId };
   }
   if (req.authContext?.isSuperAdmin) {
     return {};
