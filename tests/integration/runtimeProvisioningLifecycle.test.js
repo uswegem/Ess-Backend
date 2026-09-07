@@ -18,6 +18,12 @@ jest.mock('../../src/utils/runtimeSshClient', () => {
   };
 });
 
+// Real SMTP isn't reachable/desirable from the test suite — the relay
+// itself was verified live separately (see docs/RUNTIME_PROVISIONING.md).
+jest.mock('../../src/utils/emailService', () => ({
+  sendEmail: jest.fn(async () => ({ messageId: 'test-message-id', accepted: [] })),
+}));
+
 describe('Runtime host provisioning lifecycle (via API)', () => {
   let app;
   let token;
@@ -39,7 +45,7 @@ describe('Runtime host provisioning lifecycle (via API)', () => {
     const createRes = await request(app)
       .post('/api/v1/runtime-provisioning/tenants')
       .set('Authorization', `Bearer ${token}`)
-      .send({ tenantId: 'acme_bank', tenantName: 'Acme Bank' });
+      .send({ tenantId: 'acme_bank', tenantName: 'Acme Bank', contactFirstName: 'Amina', contactSurname: 'Hassan', contactEmail: 'amina.hassan@example.com', contactPhone: '+255712345678' });
     expect(createRes.status).toBe(201);
 
     const provisionRes = await request(app)
@@ -68,7 +74,7 @@ describe('Runtime host provisioning lifecycle (via API)', () => {
     await request(app)
       .post('/api/v1/runtime-provisioning/tenants')
       .set('Authorization', `Bearer ${token}`)
-      .send({ tenantId: 'unfinished_tenant', tenantName: 'Unfinished Tenant' });
+      .send({ tenantId: 'unfinished_tenant', tenantName: 'Unfinished Tenant', contactFirstName: 'Amina', contactSurname: 'Hassan', contactEmail: 'amina.hassan@example.com', contactPhone: '+255712345678' });
 
     const bootstrapRes = await request(app)
       .post('/api/v1/runtime-provisioning/tenants/unfinished_tenant/bootstrap')

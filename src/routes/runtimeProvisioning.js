@@ -16,6 +16,7 @@ const provisioningLimiter = rateLimit({
 
 router.use(provisioningLimiter);
 
+router.get('/tenants/check-tenant-id', ...platformAdminGuard, ProvisioningController.checkTenantId);
 router.get('/tenants', ...platformAdminGuard, ProvisioningController.list);
 router.post('/tenants', ...platformAdminGuard, ProvisioningController.create);
 router.get('/tenants/:tenantId', ...platformAdminGuard, ProvisioningController.getById);

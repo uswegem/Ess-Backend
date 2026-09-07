@@ -7,6 +7,7 @@ const {
   provisionProvisioningTenant,
   bootstrapProvisioningTenant,
   activateProvisioningTenant,
+  checkTenantIdAvailability,
   ProvisioningTenantServiceError,
 } = require('../services/provisioningTenantService');
 
@@ -38,6 +39,15 @@ class ProvisioningController {
         message: 'Runtime provisioning tenant created successfully',
         data: { tenant: tenant.toSafeJSON() },
       });
+    } catch (error) {
+      return handleError(res, error);
+    }
+  }
+
+  static async checkTenantId(req, res) {
+    try {
+      const result = await checkTenantIdAvailability(req.query.slug || req.query.tenantId);
+      return sendSuccess(res, { data: result });
     } catch (error) {
       return handleError(res, error);
     }

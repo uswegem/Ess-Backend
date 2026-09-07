@@ -1,6 +1,8 @@
 const ProvisioningTenant = require('../models/ProvisioningTenant');
 const AuditLog = require('../models/AuditLog');
 const { provisionTenantViaSsh, TENANT_CODE_PATTERN } = require('../utils/runtimeSshClient');
+const { sendEmail } = require('../utils/emailService');
+const logger = require('../utils/logger');
 
 class ProvisioningTenantServiceError extends Error {
   constructor(message, statusCode = 400, code = 'PROVISIONING_TENANT_ERROR') {
@@ -40,6 +42,44 @@ async function logAudit({ action, description, actorUserId, tenantId, status, me
   }
 }
 
+// Given a candidate tenant-code slug, returns the first available variant —
+// the slug itself if free, otherwise slug2, slug3, ... Used both by the
+// live uniqueness-check endpoint (as the admin types/blurs Tenant Name) and
+// as a create-time safety net, so a race between the check and the actual
+// submit can't silently produce a collision.
+async function findAvailableTenantId(baseSlug) {
+  const normalizedBase = String(baseSlug || '').toLowerCase();
+  let candidate = normalizedBase;
+  let suffix = 1;
+  // Bounded loop — a real naming collision chain this long would indicate
+  // something else is wrong, not a legitimate need to keep incrementing.
+  while (suffix < 1000) {
+    // eslint-disable-next-line no-await-in-loop
+    const exists = await ProvisioningTenant.exists({ tenantId: candidate });
+    if (!exists) {
+      return { tenantId: candidate, wasRenamed: candidate !== normalizedBase };
+    }
+    suffix += 1;
+    candidate = `${normalizedBase}${suffix}`;
+  }
+  throw new ProvisioningTenantServiceError(
+    `Could not find an available tenant id for '${normalizedBase}' after ${suffix} attempts`,
+    409,
+    'TENANT_ID_EXHAUSTED'
+  );
+}
+
+async function checkTenantIdAvailability(baseSlug) {
+  if (!TENANT_CODE_PATTERN.test(String(baseSlug || '').toLowerCase())) {
+    throw new ProvisioningTenantServiceError(
+      `'${baseSlug}' does not match the runtime host's tenant code format ${TENANT_CODE_PATTERN}`,
+      400,
+      'INVALID_TENANT_CODE'
+    );
+  }
+  return findAvailableTenantId(baseSlug);
+}
+
 async function listProvisioningTenants({ page = 1, limit = 20, status, search } = {}) {
   const filter = {};
   if (status) filter.status = status;
@@ -64,19 +104,20 @@ async function listProvisioningTenants({ page = 1, limit = 20, status, search } 
 }
 
 async function createProvisioningTenant(payload, { createdBy } = {}) {
-  const tenantId = payload.tenantId || `tenant-${Date.now()}`;
-  if (!TENANT_CODE_PATTERN.test(tenantId)) {
+  const requestedTenantId = (payload.tenantId || `tenant-${Date.now()}`).toLowerCase();
+  if (!TENANT_CODE_PATTERN.test(requestedTenantId)) {
     throw new ProvisioningTenantServiceError(
-      `tenantId '${tenantId}' does not match the runtime host's tenant code format ${TENANT_CODE_PATTERN}`,
+      `tenantId '${requestedTenantId}' does not match the runtime host's tenant code format ${TENANT_CODE_PATTERN}`,
       400,
       'INVALID_TENANT_CODE'
     );
   }
 
-  const existing = await ProvisioningTenant.findOne({ tenantId });
-  if (existing) {
-    throw new ProvisioningTenantServiceError('Provisioning tenant already exists', 409, 'DUPLICATE_PROVISIONING_TENANT');
-  }
+  // Safety net: the frontend already checks availability as the admin types
+  // (see checkTenantIdAvailability), but re-resolve here too so a race
+  // between that check and this submit can't produce a silent collision —
+  // append a number rather than erroring outright, same as the live check.
+  const { tenantId, wasRenamed } = await findAvailableTenantId(requestedTenantId);
 
   const tenant = await ProvisioningTenant.create({
     ...payload,
@@ -92,7 +133,38 @@ async function createProvisioningTenant(payload, { createdBy } = {}) {
     description: `Runtime provisioning tenant created: ${tenant.tenantId}`,
     actorUserId: createdBy,
     tenantId: tenant.tenantId,
+    metadata: wasRenamed ? { requestedTenantId, assignedTenantId: tenantId, reason: 'tenant_id_collision' } : undefined,
   });
+
+  // "Request received" confirmation — fires now, since this is the part of
+  // the flow that actually completes today. Deliberately does NOT mention
+  // login credentials or a login URL: no admin user exists yet (that only
+  // happens after a successful bootstrap, which isn't built — see the
+  // NOT-YET-IMPLEMENTED note on bootstrapProvisioningTenant/
+  // activateProvisioningTenant below for where the follow-up "tenant ready"
+  // email belongs once that exists).
+  if (tenant.contactEmail) {
+    try {
+      await sendEmail({
+        to: tenant.contactEmail,
+        subject: `MiraCore tenant request received: ${tenant.tenantName}`,
+        text: `Hello ${tenant.contactFirstName},\n\n`
+          + `We've received your MiraCore tenant provisioning request for "${tenant.tenantName}" `
+          + `(tenant ID: ${tenant.tenantId}).\n\n`
+          + `Our team will process this request. You'll receive a separate email once the tenant `
+          + `is fully provisioned with your login details.\n\n`
+          + `— MiraAdmin`,
+      });
+    } catch (error) {
+      // Never let an email failure block tenant record creation — log and
+      // move on, same principle as audit logging above.
+      logger.warn('Failed to send tenant-request-received email', {
+        tenantId: tenant.tenantId,
+        contactEmail: tenant.contactEmail,
+        error: error.message,
+      });
+    }
+  }
 
   return tenant;
 }
@@ -189,6 +261,14 @@ async function provisionProvisioningTenant(tenantId, { actorUserId } = {}) {
 // yet. Rather than fabricate schema/DDL here (the mistake in the original
 // version of this feature), this fails clearly so it can't be mistaken for
 // a completed step.
+// TODO(tenant-ready-email): once bootstrap is real (Liquibase migrations +
+// fineract_tenants registration + an actual admin user with a real,
+// working login), send the "tenant ready" email here on success — subject
+// along the lines of "Your MiraCore tenant is ready", body containing the
+// initial admin password and the login URL (https://cbs.miracore.co.tz).
+// Do NOT build this before bootstrap itself is real: there is no admin
+// user and no working login to email yet, and faking one would be worse
+// than not sending anything. See docs/RUNTIME_PROVISIONING.md.
 async function bootstrapProvisioningTenant() {
   throw new ProvisioningTenantServiceError(
     'Runtime tenant bootstrap (Liquibase migrations + fineract_tenants registration) is not yet implemented — provision_tenant.sh only creates the role and database.',
@@ -197,9 +277,9 @@ async function bootstrapProvisioningTenant() {
   );
 }
 
-// NOT YET IMPLEMENTED — see bootstrapProvisioningTenant above. A tenant
-// isn't meaningfully "active" in Fineract until bootstrap's remaining work
-// is designed and built.
+// NOT YET IMPLEMENTED — see bootstrapProvisioningTenant above, including the
+// TODO(tenant-ready-email) note. A tenant isn't meaningfully "active" in
+// Fineract until bootstrap's remaining work is designed and built.
 async function activateProvisioningTenant() {
   throw new ProvisioningTenantServiceError(
     'Runtime tenant activation is not yet implemented — depends on bootstrap (Liquibase migrations + fineract_tenants registration), which is not yet built.',
@@ -210,6 +290,7 @@ async function activateProvisioningTenant() {
 
 module.exports = {
   ProvisioningTenantServiceError,
+  checkTenantIdAvailability,
   listProvisioningTenants,
   createProvisioningTenant,
   getProvisioningTenant,

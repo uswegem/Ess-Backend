@@ -42,6 +42,43 @@ const provisioningTenantSchema = new mongoose.Schema({
     type: String,
     trim: true,
   },
+  // Contact details for MFI onboarding — who to reach about this tenant's
+  // provisioning request, and where the "request received"/eventual
+  // "tenant ready" emails go.
+  contactFirstName: {
+    type: String,
+    trim: true,
+    required: true,
+    maxlength: 100,
+  },
+  contactSurname: {
+    type: String,
+    trim: true,
+    required: true,
+    maxlength: 100,
+  },
+  contactEmail: {
+    type: String,
+    trim: true,
+    lowercase: true,
+    required: true,
+    validate: {
+      validator: (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value),
+      message: (props) => `'${props.value}' is not a valid email address.`,
+    },
+  },
+  contactPhone: {
+    type: String,
+    trim: true,
+    required: true,
+    // Generic E.164-ish check — an optional leading + then 8-15 digits.
+    // Deliberately not restricted to Tanzania (+255) even though that's the
+    // common case, since this platform could onboard outside Tanzania.
+    validate: {
+      validator: (value) => /^\+?[0-9]{8,15}$/.test(value),
+      message: (props) => `'${props.value}' is not a valid phone number.`,
+    },
+  },
   status: {
     type: String,
     enum: ['draft', 'provisioning', 'ready', 'failed', 'inactive'],
@@ -94,6 +131,10 @@ provisioningTenantSchema.methods.toSafeJSON = function toSafeJSON() {
     runtimePort: obj.runtimePort,
     databaseName: obj.databaseName,
     schemaName: obj.schemaName,
+    contactFirstName: obj.contactFirstName,
+    contactSurname: obj.contactSurname,
+    contactEmail: obj.contactEmail,
+    contactPhone: obj.contactPhone,
     status: obj.status,
     appConfig: obj.appConfig || {},
     notificationConfig: obj.notificationConfig || {},

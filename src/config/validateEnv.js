@@ -42,7 +42,14 @@ const optionalEnvVars = [
   'RUNTIME_PROVISIONING_ALLOWED_HOSTS',
   'RUNTIME_SSH_HOST',
   'RUNTIME_SSH_USER',
-  'RUNTIME_SSH_KEY_PATH'
+  'RUNTIME_SSH_KEY_PATH',
+  'SMTP_HOST',
+  'SMTP_PORT',
+  'SMTP_USER',
+  'SMTP_PASSWORD',
+  'SMTP_SECURE',
+  'SMTP_FROM_NAME',
+  'SMTP_FROM_ADDRESS'
 ];
 
 // Required only when the runtime-provisioning feature is actually enabled —
