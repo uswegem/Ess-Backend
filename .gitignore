@@ -77,3 +77,10 @@ Thumbs.db
 *.backup.*
 keys_backup_20260806/
 incident-2026-09-07/
+
+# Real signing keys/certs - stop committing these (found leaked in history
+# 2026-09-09; files stay on disk, just no longer tracked going forward)
+keys/private.pem
+keys/fspNameCertificate.crt
+temp_test_key.pem
+keys_backup_stale_*/
