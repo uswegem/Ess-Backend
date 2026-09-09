@@ -30,6 +30,7 @@ const auditRoutes = require('./src/routes/audit');
 const adminCompatRoutes = require('./src/routes/adminCompat');
 const loanActionsRoutes = require('./src/routes/loanActions');
 const frontendApiRoutes = require('./src/routes/frontendApi');
+const internalReportingRoutes = require('./src/routes/internalReporting');
 // const messageRoutes = require('./src/routes/messages'); // Temporarily commented out
 
 // Import middleware
@@ -79,15 +80,27 @@ app.get('/health', (req, res) => {
 });
 const PORT = process.env.PORT || 3002;
 
-// Connect to MongoDB before serving traffic
-(async () => {
-    try {
-        await connectDB();
-    } catch (error) {
-        logger.error('MongoDB connection failed during startup', { error: error.message });
-        process.exit(1);
-    }
-})();
+// Connect to MongoDB before serving traffic.
+// ROOT CAUSE FIX (recurring data-loss incident): this used to fire
+// unconditionally the instant server.js is require()'d — including when a
+// test file (tests/integration/loanOffer.test.js, topUpFlow.test.js) imports
+// server.js directly. That raced this real connectDB() (against the actual
+// production MONGODB_URI) against tests/setup.js's in-memory MongoDB
+// override; other test files' unscoped `Model.deleteMany({})` cleanup hooks
+// then had a window to run against whichever connection won the race — the
+// real one, if it connected first. Gate this exactly like the startServer()
+// guard below so requiring this file under NODE_ENV=test never touches the
+// real database at all.
+if (require.main === module || process.env.NODE_ENV !== 'test') {
+    (async () => {
+        try {
+            await connectDB();
+        } catch (error) {
+            logger.error('MongoDB connection failed during startup', { error: error.message });
+            process.exit(1);
+        }
+    })();
+}
 
 // ========== MIDDLEWARE ORDER ==========
 
@@ -289,6 +302,7 @@ app.get('/api/auth/test', (req, res) => {
 
 // Frontend API routes (for React frontend - JSON only, no XML signature required)
 app.use('/api/frontend', frontendApiRoutes);
+app.use('/api/v1/internal/reporting', internalReportingRoutes);
 
 // User management routes (protected)  
 app.use('/api/v1/users', userRoutes);
