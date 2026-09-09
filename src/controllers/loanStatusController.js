@@ -3,6 +3,7 @@ const digitalSignature = require('../utils/signatureUtils');
 const { getMessageId } = require('../utils/messageIdGenerator');
 const logger = require('../utils/logger');
 const { getUtumishiEndpoint, getApiTimeoutMs } = require('../config/runtimeEnv');
+const { getUtumishiHttpsAgent } = require('../utils/utumishiAgent');
 
 // Main controller function
 exports.triggerLoanStatusRequest = async (req, res) => {
@@ -39,10 +40,11 @@ exports.triggerLoanStatusRequest = async (req, res) => {
     // Send to ESS endpoint
     const essUrl = getUtumishiEndpoint({ required: true });
     const essResponse = await axios.post(essUrl, signedXml, {
-      headers: { 
+      headers: {
         'Content-Type': 'application/xml',
         'Accept': 'application/xml'
       },
+      httpsAgent: getUtumishiHttpsAgent(),
       timeout: getApiTimeoutMs()
     });
 
@@ -51,7 +53,7 @@ exports.triggerLoanStatusRequest = async (req, res) => {
     // Return ESS response
     res.status(200).json({ success: true, sent: signedXml, essResponse: essResponse.data });
   } catch (error) {
-    logger.error('Error in LOAN_STATUS_REQUEST:', error.message);
+    logger.error('Error in LOAN_STATUS_REQUEST:', { error: error.message });
     res.status(500).json({ success: false, error: error.message });
   }
 };
