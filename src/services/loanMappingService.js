@@ -655,6 +655,55 @@ class LoanMappingService {
     }
   }
 
+  /**
+   * Single-loan detail lookup for the LoanDetail frontend page. Accepts
+   * either a Mongo _id or an essApplicationNumber, matching how loan
+   * identifiers are used inconsistently across the frontend (LoanDetail.js
+   * passes selectedLoan._id from the list view, which itself is populated
+   * from the same transform this reuses).
+   */
+  static async getById(id, tenantId = null) {
+    const mongoose = require('mongoose');
+    const byId = mongoose.Types.ObjectId.isValid(id) ? { _id: id } : null;
+    const filter = this.scopeFilter(
+      byId ? { $or: [byId, { essApplicationNumber: id }] } : { essApplicationNumber: id },
+      tenantId
+    );
+
+    const loan = await LoanMapping.findOne(filter).lean();
+    if (!loan) {
+      const error = new Error('Loan not found');
+      error.statusCode = 404;
+      throw error;
+    }
+
+    return {
+      _id: loan._id,
+      essApplicationNumber: loan.essApplicationNumber,
+      essCheckNumber: loan.essCheckNumber,
+      essLoanNumberAlias: loan.essLoanNumberAlias,
+      fspReferenceNumber: loan.fspReferenceNumber,
+      mifosClientId: loan.mifosClientId,
+      mifosLoanId: loan.mifosLoanId,
+      mifosLoanAccountNumber: loan.mifosLoanAccountNumber,
+      productCode: loan.productCode,
+      requestedAmount: loan.requestedAmount,
+      tenure: loan.tenure,
+      status: loan.status,
+      createdAt: loan.createdAt,
+      updatedAt: loan.updatedAt,
+      clientData: loan.metadata?.clientData || null,
+      loanData: loan.metadata?.loanData || {
+        requestedAmount: loan.requestedAmount,
+        tenure: loan.tenure,
+        productCode: loan.productCode
+      },
+      employmentData: loan.metadata?.employmentData || null,
+      errors: loan.errors || [],
+      requestType: 'LOAN_APPLICATION'
+    };
+  }
+
   // Maps a loan's current status to the message type(s) that are the actual
   // next step in the ESS flow for that status, per how the handlers in
   // src/controllers/handlers/*.js and mifosWebhookHandler.js send them
