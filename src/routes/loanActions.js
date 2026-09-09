@@ -16,6 +16,36 @@ const loanActionGuards = [
 
 /**
  * @swagger
+ * /api/v1/loan-actions/{loanId}/suggested-messages:
+ *   get:
+ *     summary: Suggested message types for a loan, based on its current status
+ *     description: Single source of truth for the ManualMessageTrigger page's suggestion chips (LoanMappingService.getSuggestedMessages).
+ *     tags: [Loan Actions]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: loanId
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: "{ loanStatus, suggested: [{messageType, reason, requiresConfirmation?}], allMessageTypes }"
+ *       404:
+ *         description: Loan mapping not found
+ */
+router.get('/:loanId/suggested-messages', ...loanActionGuards, async (req, res) => {
+  try {
+    const result = await LoanMappingService.getSuggestedMessages(req.params.loanId, req.tenant?.tenantId);
+    return res.json({ success: true, data: result });
+  } catch (error) {
+    logger.error('❌ Error getting suggested messages:', error);
+    return res.status(error.statusCode || 500).json({ success: false, message: error.message || 'Internal server error' });
+  }
+});
+
+/**
+ * @swagger
  * /api/v1/loan-actions/send-disbursement-notification:
  *   post:
  *     summary: Send disbursement notification

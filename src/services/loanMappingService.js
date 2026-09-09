@@ -1,5 +1,6 @@
 const logger = require('../utils/logger');
 const LoanMapping = require('../models/LoanMapping');
+const MessageLog = require('../models/MessageLog');
 const ClientService = require('./clientService');
 const DBTransaction = require('../utils/dbTransaction');
 const healthMonitor = require('../utils/loanMappingHealthMonitor');
@@ -652,6 +653,73 @@ class LoanMappingService {
       logger.error('❌ Error getting all loan mappings with details:', error);
       throw error;
     }
+  }
+
+  // Maps a loan's current status to the message type(s) that are the actual
+  // next step in the ESS flow for that status, per how the handlers in
+  // src/controllers/handlers/*.js and mifosWebhookHandler.js send them
+  // (e.g. LOAN_INITIAL_APPROVAL_NOTIFICATION is what mifosWebhookHandler.js
+  // sends when a loan gets its initial approval from Fineract, which is the
+  // transition immediately after OFFER_SUBMITTED). Only statuses with a
+  // clearly-evidenced next message type are mapped explicitly; every status
+  // still gets LOAN_STATUS_REQUEST since that's always a valid manual action
+  // regardless of where the loan is in its lifecycle.
+  static SUGGESTED_MESSAGES_BY_STATUS = {
+    INITIAL_OFFER: [
+      { messageType: 'LOAN_INITIAL_APPROVAL_NOTIFICATION', reason: 'Loan offer submitted — send initial approval to proceed.' }
+    ],
+    OFFER_SUBMITTED: [
+      { messageType: 'LOAN_INITIAL_APPROVAL_NOTIFICATION', reason: 'Loan offer submitted — send initial approval to proceed.' }
+    ],
+    APPROVED: [
+      { messageType: 'LOAN_DISBURSEMENT_NOTIFICATION', reason: 'Loan approved — notify disbursement once funds are released.' }
+    ],
+    FINAL_APPROVAL_RECEIVED: [
+      { messageType: 'LOAN_DISBURSEMENT_NOTIFICATION', reason: 'Final approval received — notify disbursement once funds are released.' }
+    ],
+    DISBURSED: [
+      { messageType: 'PAYMENT_ACKNOWLEDGMENT_NOTIFICATION', reason: 'Loan disbursed — acknowledge the first payment when due.' }
+    ],
+    DISBURSEMENT_FAILURE_NOTIFICATION_SENT: [
+      { messageType: 'LOAN_DISBURSEMENT_FAILURE_NOTIFICATION', reason: 'Resend the disbursement failure notification.', requiresConfirmation: true }
+    ],
+    FAILED: [
+      { messageType: 'LOAN_DISBURSEMENT_FAILURE_NOTIFICATION', reason: 'Disbursement failed — notify the failure.', requiresConfirmation: true }
+    ],
+    COMPLETED: [
+      { messageType: 'FULL_LOAN_REPAYMENT_NOTIFICATION', reason: 'Loan completed — send the full repayment notification.' }
+    ],
+    WAITING_FOR_LIQUIDATION: [
+      { messageType: 'LOAN_LIQUIDATION_NOTIFICATION', reason: 'Takeover loan awaiting liquidation notification.' }
+    ]
+  };
+
+  /**
+   * Suggested message types for a given loan, based on its current status.
+   * Single source of truth for the /loan-actions/:loanId/suggested-messages
+   * route and the ManualMessageTrigger frontend page.
+   */
+  static async getSuggestedMessages(loanId, tenantId = null) {
+    const loan = await LoanMapping.findOne(this.scopeFilter({ _id: loanId }, tenantId));
+    if (!loan) {
+      const error = new Error('Loan not found');
+      error.statusCode = 404;
+      throw error;
+    }
+
+    const statusSuggestions = this.SUGGESTED_MESSAGES_BY_STATUS[loan.status] || [];
+    const suggested = [
+      ...statusSuggestions,
+      { messageType: 'LOAN_STATUS_REQUEST', reason: 'Always available — request the current status from Fineract.' }
+    ];
+
+    const allMessageTypes = MessageLog.schema.path('messageType').enumValues;
+
+    return {
+      loanStatus: loan.status,
+      suggested,
+      allMessageTypes
+    };
   }
 }
 
