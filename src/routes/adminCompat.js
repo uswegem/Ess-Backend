@@ -112,8 +112,18 @@ router.get('/loan/list-products', authMiddleware, async (req, res) => {
  */
 router.get('/loan/list-employee-loan', authMiddleware, async (req, res) => {
     try {
+        const { status, excludeStatuses, search, startDate, endDate } = req.query;
         const loans = await LoanMappingService.getAllWithDetails({
-          tenantId: req.tenant?.tenantId || null
+          tenantId: req.tenant?.tenantId || null,
+          status,
+          excludeStatuses,
+          applicationNumber: search,
+          startDate,
+          endDate,
+          // No server-side pagination UI on this page (client-side DataGrid paging only) -
+          // fetch everything in range/filter rather than silently truncating at the
+          // service's default limit of 20.
+          limit: 5000
         });
         res.json({
             success: true,

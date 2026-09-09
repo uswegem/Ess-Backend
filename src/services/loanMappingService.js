@@ -571,6 +571,7 @@ class LoanMappingService {
         page = 1,
         limit = 20,
         status,
+        excludeStatuses,
         applicationNumber,
         clientName,
         startDate,
@@ -581,11 +582,21 @@ class LoanMappingService {
       } = params;
 
       const filter = this.scopeFilter({}, tenantId);
-      
+
       if (status && status !== '') {
         filter.status = status;
+      } else if (excludeStatuses) {
+        // Mutually exclusive with `status` (an explicit status pick always wins) - e.g.
+        // CHARGES_CALCULATED loans are charge-inquiry-only records with no real
+        // LOAN_OFFER_REQUEST behind them, so both the /loan list and the message-trigger
+        // loan picker exclude them by default via this param.
+        const list = Array.isArray(excludeStatuses) ? excludeStatuses : String(excludeStatuses).split(',');
+        const cleaned = list.map((s) => s.trim()).filter(Boolean);
+        if (cleaned.length > 0) {
+          filter.status = { $nin: cleaned };
+        }
       }
-      
+
       if (applicationNumber && applicationNumber !== '') {
         filter.essApplicationNumber = { $regex: applicationNumber, $options: 'i' };
       }
