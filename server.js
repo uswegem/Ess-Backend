@@ -31,7 +31,7 @@ const adminCompatRoutes = require('./src/routes/adminCompat');
 const loanActionsRoutes = require('./src/routes/loanActions');
 const frontendApiRoutes = require('./src/routes/frontendApi');
 const internalReportingRoutes = require('./src/routes/internalReporting');
-// const messageRoutes = require('./src/routes/messages'); // Temporarily commented out
+const messageRoutes = require('./src/routes/messages');
 
 // Import middleware
 const { verifySignatureMiddleware } = require('./src/middleware/signatureMiddleware');
@@ -343,8 +343,8 @@ app.use('/api/v1/runtime-provisioning', runtimeProvisioningRoutes);
 const circuitBreakerRoutes = require('./src/routes/circuitBreaker');
 app.use('/api/v1/circuit-breaker', circuitBreakerRoutes);
 
-// Message management routes (protected) - Temporarily commented out
-// app.use('/api/v1/messages', messageRoutes);
+// Message management routes (protected)
+app.use('/api/v1/messages', messageRoutes);
 
 // Miracore API routes (after specific routes to avoid conflicts)
 app.use('/api', apiRouter);

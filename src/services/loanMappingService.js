@@ -699,8 +699,8 @@ class LoanMappingService {
    * Single source of truth for the /loan-actions/:loanId/suggested-messages
    * route and the ManualMessageTrigger frontend page.
    */
-  static async getSuggestedMessages(loanId, tenantId = null) {
-    const loan = await LoanMapping.findOne(this.scopeFilter({ _id: loanId }, tenantId));
+  static async getSuggestedMessages(applicationNumber, tenantId = null) {
+    const loan = await LoanMapping.findOne(this.scopeFilter({ essApplicationNumber: applicationNumber }, tenantId));
     if (!loan) {
       const error = new Error('Loan not found');
       error.statusCode = 404;
