@@ -68,6 +68,23 @@ const loanMappingSchema = new mongoose.Schema({
     required: true
   },
 
+  // Charge breakdown (also duplicated inside metadata.loanData as raw
+  // payload, kept there for backwards compatibility - these top-level
+  // fields exist so the admin UI/API can query and display them without
+  // depending on the shape of the Mixed metadata blob)
+  insurance: {
+    type: Number,
+    required: false
+  },
+  processingFee: {
+    type: Number,
+    required: false
+  },
+  otherCharges: {
+    type: Number,
+    required: false
+  },
+
   // Track original message type that initiated this loan
   originalMessageType: {
     type: String,

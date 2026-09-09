@@ -64,6 +64,9 @@ class LoanMappingService {
         productCode: loanData.productCode || "17",
         requestedAmount: loanData.requestedAmount,
         tenure: loanData.tenure || 24,
+        insurance: loanData.insurance,
+        processingFee: loanData.processingFee,
+        otherCharges: loanData.otherCharges,
         status: 'OFFER_SUBMITTED',
         originalMessageType: originalMessageType, // Store original message type
         metadata: {
@@ -634,10 +637,17 @@ class LoanMappingService {
         updatedAt: loan.updatedAt,
         // Extract nested data for easier frontend access
         clientData: loan.metadata?.clientData || null,
-        loanData: loan.metadata?.loanData || {
+        // Top-level insurance/processingFee/otherCharges (when populated by a
+        // newer write) win over whatever the raw metadata.loanData blob has,
+        // so a corrected/backfilled top-level value is actually reflected.
+        loanData: {
           requestedAmount: loan.requestedAmount,
           tenure: loan.tenure,
-          productCode: loan.productCode
+          productCode: loan.productCode,
+          ...(loan.metadata?.loanData || {}),
+          insurance: loan.insurance ?? loan.metadata?.loanData?.insurance,
+          processingFee: loan.processingFee ?? loan.metadata?.loanData?.processingFee,
+          otherCharges: loan.otherCharges ?? loan.metadata?.loanData?.otherCharges
         },
         employmentData: loan.metadata?.employmentData || null,
         errors: loan.errors || [],
@@ -693,10 +703,14 @@ class LoanMappingService {
       createdAt: loan.createdAt,
       updatedAt: loan.updatedAt,
       clientData: loan.metadata?.clientData || null,
-      loanData: loan.metadata?.loanData || {
+      loanData: {
         requestedAmount: loan.requestedAmount,
         tenure: loan.tenure,
-        productCode: loan.productCode
+        productCode: loan.productCode,
+        ...(loan.metadata?.loanData || {}),
+        insurance: loan.insurance ?? loan.metadata?.loanData?.insurance,
+        processingFee: loan.processingFee ?? loan.metadata?.loanData?.processingFee,
+        otherCharges: loan.otherCharges ?? loan.metadata?.loanData?.otherCharges
       },
       employmentData: loan.metadata?.employmentData || null,
       errors: loan.errors || [],
