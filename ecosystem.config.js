@@ -14,7 +14,16 @@ module.exports = {
     env_file: '.env', // Load environment variables from .env file
     env: {
       NODE_ENV: 'production',
-      PORT: 3002
+      PORT: 3002,
+      // ESS_UTUMISHI (gateway.ess.utumishi.go.tz) doesn't send its
+      // intermediate cert (DigiCert Global G2 TLS RSA SHA256 2020 CA1) --
+      // openssl s_client confirms only the leaf cert (depth=0), so Node
+      // can't build the chain to a trusted root on its own. The DigiCert
+      // root itself is standard/already trusted; supplying just the
+      // missing intermediate here fixes it without weakening TLS
+      // verification for anything else. Must be a real process env var --
+      // dotenv/.env loads too late for Node's own TLS bootstrap to see it.
+      NODE_EXTRA_CA_CERTS: '/opt/ess2/backend/certs/digicert-global-g2-tls-rsa-sha256-2020-ca1.pem'
     },
     max_memory_restart: '512M',
     error_file: 'logs/err.log',
