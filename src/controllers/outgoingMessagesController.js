@@ -3,15 +3,17 @@ const digitalSignature = require('../utils/signatureUtils');
 const { getMessageId } = require('../utils/messageIdGenerator');
 const logger = require('../utils/logger');
 const { getUtumishiEndpoint, getApiTimeoutMs } = require('../config/runtimeEnv');
+const { getUtumishiHttpsAgent } = require('../utils/utumishiAgent');
 const xml2js = require('xml2js');
 
 async function sendToESS(signedXml) {
   const essUrl = getUtumishiEndpoint({ required: true });
-  return axios.post(essUrl, signedXml, { 
-    headers: { 
+  return axios.post(essUrl, signedXml, {
+    headers: {
       'Content-Type': 'application/xml',
       'Accept': 'application/xml'
     },
+    httpsAgent: getUtumishiHttpsAgent(),
     timeout: getApiTimeoutMs()
   });
 }
