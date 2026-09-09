@@ -29,6 +29,7 @@ const userRoutes = require('./src/routes/users');
 const auditRoutes = require('./src/routes/audit');
 const adminCompatRoutes = require('./src/routes/adminCompat');
 const loanActionsRoutes = require('./src/routes/loanActions');
+const manualMessageActionsRoutes = require('./src/routes/manualMessageActions');
 const frontendApiRoutes = require('./src/routes/frontendApi');
 const internalReportingRoutes = require('./src/routes/internalReporting');
 const messageRoutes = require('./src/routes/messages');
@@ -331,6 +332,11 @@ app.use('/api/v1/tenants/:tenantId/api-keys', apiKeyRoutes);
 
 // Loan action routes for manual notifications (protected)
 app.use('/api/v1/loan-actions', loanActionsRoutes);
+
+// Authenticated MiraAdmin manual-trigger routes (outgoing-message,
+// loan-status-request) -- the ManualMessageTrigger frontend page calls
+// these at /api/v1 directly, not under /api/v1/loan-actions.
+app.use('/api/v1', manualMessageActionsRoutes);
 
 // MIFOS administration and monitoring routes
 const mifosAdminRoutes = require('./src/routes/mifosAdmin');
