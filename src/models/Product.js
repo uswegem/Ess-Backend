@@ -109,6 +109,13 @@ const productSchema = new mongoose.Schema({
     type: Number,
     default: 0
   },
+  // Flat other-charges amount (legal fees etc.) - same missing-from-schema gap as
+  // status/utumishiSyncStatus above; the frontend has a column and an edit-form field for
+  // this, but it was silently dropped on every save until now.
+  otherCharges: {
+    type: Number,
+    default: 0
+  },
 
   // Amount limits
   minAmount: {
