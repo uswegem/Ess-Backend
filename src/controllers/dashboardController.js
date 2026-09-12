@@ -1,5 +1,11 @@
 const mongoose = require('mongoose');
 const AuditLog = require('../models/AuditLog');
+// Required for activity()'s AuditLog.find(...).populate('userId', ...) below - this
+// controller never otherwise references the User model directly, so Mongoose has no
+// guarantee it's been registered on this connection by the time populate() runs here,
+// regardless of what else has (or hasn't) been required elsewhere in the request path.
+// eslint-disable-next-line no-unused-vars
+const User = require('../models/User');
 const TenantUser = require('../models/TenantUser');
 const logger = require('../utils/logger');
 const { buildEssLoanSummary } = require('../utils/essLoanSummary');
