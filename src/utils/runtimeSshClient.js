@@ -79,10 +79,51 @@ async function provisionTenantViaSsh(tenantCode) {
   });
 }
 
+// Invokes the runtime host's bootstrap_tenant.sh over SSH — registers a
+// tenant already created by provisionTenantViaSsh (Postgres role +
+// database) with Fineract's own tenant_server_connections/tenants tables,
+// so Fineract picks it up on its next restart. Same forced-command wrapper
+// as provisionTenantViaSsh; the only difference on the wire is the
+// "bootstrap:" prefix the wrapper dispatches on (see
+// miraadmin-provision-wrapper.sh on the runtime host) — a bare tenant code
+// still means "provision", unchanged.
+async function bootstrapTenantViaSsh(tenantCode) {
+  assertValidTenantCode(tenantCode);
+  const { host, user, keyPath } = requireSshConfig();
+
+  const args = [
+    '-i', keyPath,
+    '-o', 'BatchMode=yes',
+    '-o', 'StrictHostKeyChecking=yes',
+    '-o', 'ConnectTimeout=10',
+    `${user}@${host}`,
+    `bootstrap:${tenantCode}`,
+  ];
+
+  return new Promise((resolve) => {
+    execFile('ssh', args, { timeout: 60000 }, (error, stdout, stderr) => {
+      if (error) {
+        resolve({
+          success: false,
+          error: new RuntimeSshExecError(
+            `bootstrap_tenant.sh invocation failed: ${error.message}`,
+            { stdout, stderr, code: error.code }
+          ).message,
+          stdout,
+          stderr,
+        });
+        return;
+      }
+      resolve({ success: true, stdout, stderr });
+    });
+  });
+}
+
 module.exports = {
   RuntimeSshConfigError,
   RuntimeSshExecError,
   TENANT_CODE_PATTERN,
   assertValidTenantCode,
   provisionTenantViaSsh,
+  bootstrapTenantViaSsh,
 };

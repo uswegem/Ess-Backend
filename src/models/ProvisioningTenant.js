@@ -81,7 +81,10 @@ const provisioningTenantSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['draft', 'provisioning', 'ready', 'failed', 'inactive'],
+    // 'active' is set by activateProvisioningTenant() once a bootstrapped
+    // tenant's schema/admin login has been confirmed working post-restart —
+    // see docs/RUNTIME_PROVISIONING.md.
+    enum: ['draft', 'provisioning', 'ready', 'failed', 'inactive', 'active'],
     default: 'provisioning',
   },
   appConfig: {

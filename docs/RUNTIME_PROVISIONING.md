@@ -42,14 +42,66 @@ on top of the remote script's own validation.
 - `POST .../tenants/:id/provision` — the real step: SSH-triggers
   `provision_tenant.sh`, creating the role + database on the runtime host.
   Idempotent — safe to retry after a failure.
-- `POST .../tenants/:id/bootstrap` and `.../activate` — **not yet
-  implemented.** `provision_tenant.sh` only creates the role and database;
-  it deliberately does not run Liquibase migrations or register the tenant
-  in Fineract's own `fineract_tenants` table. Both are required before a
-  tenant is actually usable and neither has a design yet. These endpoints
-  return `501 Not Implemented` rather than faking success — do not build
-  fabricated logic here; that was the mistake in the original version of
-  this feature.
+- `POST .../tenants/:id/bootstrap` — SSH-triggers `bootstrap_tenant.sh`
+  (same restricted-SSH pattern as `provision_tenant.sh`, dispatched via
+  the `bootstrap:<code>` prefix that `miraadmin-provision-wrapper.sh` on
+  the runtime host understands). It inserts one row into
+  `tenant_server_connections` and one into `tenants` in Fineract's own
+  `fineract_tenants` control-plane database. Idempotent — refuses to
+  touch an existing `tenants` row for that identifier.
+
+  **The tenant DB password is encrypted, and `master_password_hash` set,
+  at insert time** — via `fineract_tenant_crypto.js` next to the script on
+  the runtime host, which replicates Fineract's own
+  `EncryptionUtil`/`DatabasePasswordEncryptor` exactly (AES-256-CBC,
+  PBKDF2WithHmacSHA1 key derivation, master password `"fineract"` —
+  Fineract's own unoverridden default on this host, confirmed by reading
+  `application.properties` and checking that neither
+  `FINERACT_DEFAULT_TENANTDB_MASTER_PASSWORD` nor
+  `FINERACT_DEFAULT_MASTER_PASSWORD` is set anywhere in
+  `/opt/mfi/k3s/manifests/fineract.yaml`).
+
+  **An earlier version of this script inserted a plaintext password with
+  `master_password_hash` left `NULL`**, on the assumption that Fineract's
+  `TenantPasswordEncryptionTask` (a Liquibase custom task) would encrypt
+  it in place on the next startup. That assumption was wrong and caused a
+  real production incident: that changeset only ever runs once, the first
+  time it is applied to a given `fineract_tenants` database — which
+  already happened, long before this feature or any tenant it registers
+  existed — so it never fires again for a row inserted afterward.
+  `TenantDataSourceFactory` then throws `IllegalArgumentException: salt
+  cannot be null` while building that tenant's connection, and because
+  `TenantDatabaseUpgradeService` treats any single tenant's
+  datasource-creation failure as fatal to the whole Fineract startup, one
+  bad row crash-looped Fineract for *every* tenant on the host, not just
+  the new one. Do not revert to that approach.
+
+  **This alone still does not make the tenant usable**: Fineract's
+  `TenantDatabaseUpgradeService` only loads new tenant rows, runs the
+  per-tenant schema migration, and seeds the default admin user once, at
+  Fineract's own startup — so the runtime host's Fineract needs a
+  deliberate restart afterward before the tenant is actually live. That
+  restart is a manual, separate step (it affects every tenant on that
+  host), not automated by this endpoint.
+
+- `POST .../tenants/:id/activate` — requires `status: 'ready'` and
+  `bootstrap.status: 'completed'` (i.e. a restart has already confirmed
+  the tenant's schema migrated cleanly — see above). Flips `status` to
+  `'active'` and sends the "tenant ready" email with the login URL and the
+  seeded default credentials (`mifos`/`password` — Fineract's own
+  well-known seed account, not fabricated by this portal; Fineract forces
+  a password change on its first login).
+
+  **Deliberately does not call Fineract's own `/authentication` endpoint
+  to prove the login works before activating** — that legacy Basic Auth
+  endpoint currently returns `500` for *every* tenant on this runtime
+  host, including `reprocheck` (the long-established, definitely-working
+  seed tenant), for reasons unrelated to any individual tenant's setup.
+  This instance has `FINERACT_SECURITY_OIDC_FEDERATION_ENABLED=true`, and
+  real login most likely goes through Keycloak rather than this endpoint —
+  Keycloak wiring is its own, still-undesigned piece of work (see
+  `provision_tenant.sh`'s own comments). Gating activation on that live
+  call would mean no tenant could ever be activated on this host.
 
 All routes require `super_admin` or `admin` role and are rate-limited.
 

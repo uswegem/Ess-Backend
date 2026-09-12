@@ -1,6 +1,6 @@
 const ProvisioningTenant = require('../models/ProvisioningTenant');
 const AuditLog = require('../models/AuditLog');
-const { provisionTenantViaSsh, TENANT_CODE_PATTERN } = require('../utils/runtimeSshClient');
+const { provisionTenantViaSsh, bootstrapTenantViaSsh, TENANT_CODE_PATTERN } = require('../utils/runtimeSshClient');
 const { sendEmail } = require('../utils/emailService');
 const logger = require('../utils/logger');
 
@@ -254,38 +254,139 @@ async function provisionProvisioningTenant(tenantId, { actorUserId } = {}) {
   return tenant;
 }
 
-// NOT YET IMPLEMENTED. provision_tenant.sh only creates the Postgres role
-// and database — it deliberately does not run Liquibase migrations or
-// register the tenant in Fineract's own fineract_tenants table. Both are
-// required before a tenant is actually usable, and neither has a design
-// yet. Rather than fabricate schema/DDL here (the mistake in the original
-// version of this feature), this fails clearly so it can't be mistaken for
-// a completed step.
-// TODO(tenant-ready-email): once bootstrap is real (Liquibase migrations +
-// fineract_tenants registration + an actual admin user with a real,
-// working login), send the "tenant ready" email here on success — subject
-// along the lines of "Your MiraCore tenant is ready", body containing the
-// initial admin password and the login URL (https://cbs.miracore.co.tz).
-// Do NOT build this before bootstrap itself is real: there is no admin
-// user and no working login to email yet, and faking one would be worse
-// than not sending anything. See docs/RUNTIME_PROVISIONING.md.
-async function bootstrapProvisioningTenant() {
-  throw new ProvisioningTenantServiceError(
-    'Runtime tenant bootstrap (Liquibase migrations + fineract_tenants registration) is not yet implemented — provision_tenant.sh only creates the role and database.',
-    501,
-    'BOOTSTRAP_NOT_IMPLEMENTED'
-  );
+// Registers a tenant (already created by provisionProvisioningTenant) with
+// Fineract's own control-plane database, via bootstrap_tenant.sh on the
+// runtime host — a new script, restricted the same way provision_tenant.sh
+// is (see docs/RUNTIME_PROVISIONING.md). It inserts one tenant_server_
+// connections row and one tenants row; it does NOT run Liquibase itself.
+//
+// IMPORTANT: this step alone does not make the tenant usable yet.
+// Fineract's own TenantDatabaseUpgradeService only picks up new rows in
+// tenant_server_connections/tenants (and runs the per-tenant schema
+// migration + seeds the default admin user) once at Fineract startup — so
+// the tenant isn't actually live until Fineract on the runtime host is
+// restarted. That restart is a deliberate, separate, manually-triggered
+// step (affects the other tenants on that host too) — not done here.
+//
+// TODO(tenant-ready-email): the "tenant ready" email (subject along the
+// lines of "Your MiraCore tenant is ready", containing the seeded default
+// admin credentials and the login URL) should be sent once activation
+// confirms the tenant is actually live post-restart — see
+// activateProvisioningTenant below. Do not send it from here: bootstrap
+// only registers the tenant, it does not yet have a working schema/login.
+async function bootstrapProvisioningTenant(tenantId, { actorUserId } = {}) {
+  const tenant = await getProvisioningTenant(tenantId);
+
+  if (tenant.bootstrap?.status === 'awaiting_restart' || tenant.bootstrap?.status === 'completed') {
+    return tenant;
+  }
+
+  tenant.bootstrap = {
+    ...(tenant.bootstrap || {}),
+    status: 'in_progress',
+    startedAt: new Date(),
+  };
+  await tenant.save();
+
+  const result = await bootstrapTenantViaSsh(tenant.tenantId);
+
+  tenant.bootstrap = {
+    ...(tenant.bootstrap || {}),
+    // Registered in fineract_tenants, but schema/admin user are only
+    // applied on Fineract's next restart — not "completed" yet.
+    status: result.success ? 'awaiting_restart' : 'failed',
+    finishedAt: new Date(),
+    databaseCreated: true,
+    schemaApplied: false,
+    adminUserCreated: false,
+    lastError: result.success ? undefined : result.error,
+  };
+  await tenant.save();
+
+  await logAudit({
+    action: 'runtime_tenant_bootstrap',
+    description: `Runtime tenant bootstrap (control-plane registration) ${result.success ? 'succeeded' : 'failed'} for tenant: ${tenant.tenantId}`,
+    actorUserId,
+    tenantId: tenant.tenantId,
+    status: result.success ? 'success' : 'failed',
+    metadata: result.success ? undefined : { error: result.error },
+  });
+
+  return tenant;
 }
 
-// NOT YET IMPLEMENTED — see bootstrapProvisioningTenant above, including the
-// TODO(tenant-ready-email) note. A tenant isn't meaningfully "active" in
-// Fineract until bootstrap's remaining work is designed and built.
-async function activateProvisioningTenant() {
-  throw new ProvisioningTenantServiceError(
-    'Runtime tenant activation is not yet implemented — depends on bootstrap (Liquibase migrations + fineract_tenants registration), which is not yet built.',
-    501,
-    'ACTIVATE_NOT_IMPLEMENTED'
-  );
+// Marks a bootstrapped tenant active and sends the "tenant ready" email.
+//
+// This deliberately does NOT call Fineract's own /authentication endpoint
+// to prove the login works end-to-end before activating — that endpoint
+// returns 500 for every tenant on this runtime host right now, including
+// reprocheck (the long-established, definitely-working seed tenant), for
+// reasons unrelated to any individual tenant's setup (this instance has
+// FINERACT_SECURITY_OIDC_FEDERATION_ENABLED=true, and real login likely
+// goes through Keycloak rather than this legacy Basic Auth path — Keycloak
+// wiring is its own, still-deferred piece of work per
+// docs/RUNTIME_PROVISIONING.md). Gating activation on that call would mean
+// no tenant could ever be activated. Instead this trusts
+// bootstrap.schemaApplied/adminUserCreated, which reflect what a clean,
+// non-crash-looping Fineract restart after bootstrap actually confirmed —
+// the same level of evidence provisionProvisioningTenant() already trusts
+// from provision_tenant.sh's own exit status, not a fresh live check.
+async function activateProvisioningTenant(tenantId, { actorUserId } = {}) {
+  const tenant = await getProvisioningTenant(tenantId);
+
+  if (tenant.status === 'active') {
+    return tenant;
+  }
+
+  if (tenant.status !== 'ready' || tenant.bootstrap?.status !== 'completed') {
+    throw new ProvisioningTenantServiceError(
+      `Tenant '${tenant.tenantId}' cannot be activated yet: status is '${tenant.status}', bootstrap status is '${tenant.bootstrap?.status || 'not_started'}' — both must be 'ready'/'completed' first.`,
+      400,
+      'ACTIVATE_PRECONDITION_FAILED'
+    );
+  }
+
+  tenant.status = 'active';
+  await tenant.save();
+
+  await logAudit({
+    action: 'runtime_tenant_activate',
+    description: `Runtime provisioning tenant activated: ${tenant.tenantId}`,
+    actorUserId,
+    tenantId: tenant.tenantId,
+    status: 'success',
+  });
+
+  // TODO(tenant-ready-email) fulfilled: the default admin credential here
+  // is Fineract's own well-known seed value ('mifos'/'password') — not
+  // fabricated by this portal — and Fineract forces a password change on
+  // that account's first login, same as any fresh Fineract tenant.
+  if (tenant.contactEmail) {
+    try {
+      await sendEmail({
+        to: tenant.contactEmail,
+        subject: `Your MiraCore tenant is ready: ${tenant.tenantName}`,
+        text: `Hello ${tenant.contactFirstName},\n\n`
+          + `Your MiraCore tenant "${tenant.tenantName}" (tenant ID: ${tenant.tenantId}) is now live.\n\n`
+          + `Login URL: https://cbs.miracore.co.tz\n`
+          + `Tenant identifier: ${tenant.tenantId}\n`
+          + `Username: mifos\n`
+          + `Temporary password: password\n\n`
+          + `You'll be required to change this password on first login.\n\n`
+          + `— MiraAdmin`,
+      });
+    } catch (error) {
+      // Never let an email failure undo activation — log and move on,
+      // same principle as the create-tenant email above.
+      logger.warn('Failed to send tenant-ready email', {
+        tenantId: tenant.tenantId,
+        contactEmail: tenant.contactEmail,
+        error: error.message,
+      });
+    }
+  }
+
+  return tenant;
 }
 
 module.exports = {

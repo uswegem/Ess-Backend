@@ -9,6 +9,102 @@ const User = require('../models/User');
 const TenantUser = require('../models/TenantUser');
 const logger = require('../utils/logger');
 const { buildEssLoanSummary } = require('../utils/essLoanSummary');
+const { maker: cbsApi } = require('../services/cbs.api');
+
+function mifosDate(value) {
+  return Array.isArray(value) ? new Date(Date.UTC(value[0], value[1] - 1, value[2])) : null;
+}
+
+function inDateRange(value, from, to) {
+  if (!value) return false;
+  return (!from || value >= from) && (!to || value <= to);
+}
+
+async function getMifosSummary({ from, to }) {
+  const response = await cbsApi.get('/v1/loans', { params: { limit: 1000 } });
+  const loans = response.data?.pageItems || [];
+  const details = await Promise.all(loans.map(async (loan) => {
+    const result = await cbsApi.get(`/v1/loans/${loan.id}`);
+    return result.data;
+  }));
+  const today = new Date();
+  const buckets = {
+    current: { label: 'Current', count: 0, principalDisbursed: 0, principalOutstanding: 0, interestOutstanding: 0, totalOutstanding: 0, totalCollected: 0 },
+    days_1_30: { label: '1-30 days', count: 0, principalDisbursed: 0, principalOutstanding: 0, interestOutstanding: 0, totalOutstanding: 0, totalCollected: 0 },
+    days_31_60: { label: '31-60 days', count: 0, principalDisbursed: 0, principalOutstanding: 0, interestOutstanding: 0, totalOutstanding: 0, totalCollected: 0 },
+    days_61_90: { label: '61-90 days', count: 0, principalDisbursed: 0, principalOutstanding: 0, interestOutstanding: 0, totalOutstanding: 0, totalCollected: 0 },
+    days_90_plus: { label: '90+ days', count: 0, principalDisbursed: 0, principalOutstanding: 0, interestOutstanding: 0, totalOutstanding: 0, totalCollected: 0 }
+  };
+  const activeStatuses = new Set(['Active', 'Overpaid']);
+  const activeBorrowers = new Set(details.filter((loan) => activeStatuses.has(loan.status?.value)).map((loan) => loan.clientId));
+  let totalOutstandingPortfolio = 0;
+  let principalPaidTotal = 0;
+  let interestPaidTotal = 0;
+  let interestIncome = 0;
+  let feeIncome = 0;
+  let totalExpected = 0;
+  let totalCollected = 0;
+  let nplAmount = 0;
+  let disbursedCount = 0;
+  let disbursedAmount = 0;
+
+  for (const loan of details) {
+    const summary = loan.summary || {};
+    const timeline = loan.timeline || {};
+    const disbursedAt = mifosDate(timeline.actualDisbursementDate);
+    const principalDisbursed = Number(summary.principalDisbursed || 0);
+    const principalOutstanding = Number(summary.principalOutstanding || 0);
+    const interestOutstanding = Number(summary.interestOutstanding || 0);
+    const totalOutstanding = Number(summary.totalOutstanding || 0);
+    const expectedRepayment = Number(summary.totalExpectedRepayment || 0);
+    const repayment = Number(summary.totalRepayment || 0);
+    totalOutstandingPortfolio += principalOutstanding;
+    principalPaidTotal += Number(summary.principalPaid || 0);
+    interestPaidTotal += Number(summary.interestPaid || 0);
+    interestIncome += Number(summary.interestCharged || 0);
+    feeIncome += Number(summary.feeChargesCharged || 0);
+    totalExpected += expectedRepayment;
+    totalCollected += repayment;
+    if (inDateRange(disbursedAt, from, to)) {
+      disbursedCount += 1;
+      disbursedAmount += principalDisbursed;
+    }
+
+    const overdueSince = mifosDate(summary.overdueSinceDate);
+    const overdueDays = overdueSince ? Math.max(0, Math.floor((today - overdueSince) / 86400000)) : 0;
+    const bucketKey = !overdueSince || overdueDays === 0 ? 'current'
+      : overdueDays <= 30 ? 'days_1_30'
+        : overdueDays <= 60 ? 'days_31_60'
+          : overdueDays <= 90 ? 'days_61_90' : 'days_90_plus';
+    if (activeStatuses.has(loan.status?.value)) {
+      const bucket = buckets[bucketKey];
+      bucket.count += 1;
+      bucket.principalDisbursed += principalDisbursed;
+      bucket.principalOutstanding += principalOutstanding;
+      bucket.interestOutstanding += interestOutstanding;
+      bucket.totalOutstanding += totalOutstanding;
+      bucket.totalCollected += repayment;
+    }
+    if (bucketKey === 'days_90_plus') nplAmount += totalOutstanding;
+  }
+
+  return {
+    totalOutstandingPortfolio,
+    par30Percent: totalOutstandingPortfolio ? Number(((nplAmount / totalOutstandingPortfolio) * 100).toFixed(2)) : 0,
+    nplPercent: totalOutstandingPortfolio ? Number(((nplAmount / totalOutstandingPortfolio) * 100).toFixed(2)) : 0,
+    nplAmount,
+    loansDisbursedThisMonthCount: disbursedCount,
+    loansDisbursedThisMonthAmount: disbursedAmount,
+    principalPaidTotal,
+    interestIncomeThisMonth: interestIncome,
+    interestPaidTotal,
+    feeIncomeThisMonth: feeIncome,
+    activeBorrowers: activeBorrowers.size,
+    collectionRatePercent: totalExpected ? Number(((totalCollected / totalExpected) * 100).toFixed(2)) : 0,
+    delinquencyBuckets: buckets,
+    source: 'MIFOS'
+  };
+}
 
 // SECURITY FIX: a caller-supplied ?tenantId= used to be honored unconditionally,
 // for ANY authenticated dashboard:read caller — which every tenant role has by
@@ -52,12 +148,14 @@ class DashboardController {
       const loanMatch = { ...tenantFilter };
 
       const MessageLog = require('../models/MessageLog');
+      const from = req.query.from ? new Date(`${req.query.from}T00:00:00.000Z`) : null;
+      const to = req.query.to ? new Date(`${req.query.to}T23:59:59.999Z`) : null;
       const messageMatch = {
         status: { $in: ['pending', 'failed'] },
         ...tenantFilter,
       };
 
-      const [totalLoans, loansByStatus, tenantUserCount, dailyApplications, pendingMessages] = await Promise.all([
+      const [totalLoans, loansByStatus, tenantUserCount, dailyApplications, pendingMessages, mifosSummary] = await Promise.all([
         db.collection('loanmappings').countDocuments(loanMatch),
         db.collection('loanmappings').aggregate([
           { $match: loanMatch },
@@ -82,6 +180,10 @@ class DashboardController {
           ]).toArray();
         })(),
         MessageLog.countDocuments(messageMatch).catch(() => 0),
+        getMifosSummary({ from, to }).catch((error) => {
+          logger.warn('MIFOS dashboard summary unavailable', { error: error.message });
+          return null;
+        }),
       ]);
 
       const successful = loansByStatus.find((s) => s._id === 'DISBURSED' || s._id === 'OFFER_SUBMITTED')?.count || 0;
@@ -112,6 +214,7 @@ class DashboardController {
               totalAmount: item.totalAmount || 0
             }))
           },
+          miraCoreSummary: mifosSummary,
           tenantId: tenantFilter.tenantId || null
         }
       });
