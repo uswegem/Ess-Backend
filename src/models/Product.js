@@ -168,7 +168,17 @@ const productSchema = new mongoose.Schema({
     type: Boolean,
     default: true
   },
-  
+
+  // Whether Utumishi has this product's current data (via PRODUCT_DETAIL). Read/written by
+  // the frontend for a while before this field actually existed here - same class of bug as
+  // `status` above (Mongoose strict mode silently dropped it), so every product always
+  // displayed as "not submitted" regardless of its real state.
+  utumishiSyncStatus: {
+    type: String,
+    enum: ['NOT_SUBMITTED', 'SUBMITTED', 'EDITED_SINCE_SUBMIT', 'SYNC_FAILED'],
+    default: 'NOT_SUBMITTED'
+  },
+
   // MIFOS integration
   mifosProductId: {
     type: Number,

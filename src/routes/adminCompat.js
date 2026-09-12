@@ -55,6 +55,8 @@ router.get('/loan/list-products', authMiddleware, async (req, res) => {
                 shariaFacility: 1,
                 termsConditions: 1,
                 mifosProductId: 1,
+                status: 1,
+                utumishiSyncStatus: 1,
                 createdAt: 1
             })
             .sort({ createdAt: -1 })
@@ -82,7 +84,9 @@ router.get('/loan/list-products', authMiddleware, async (req, res) => {
             forExecutive: p.forExecutive,
             shariaFacility: p.shariaFacility,
             termsConditions: p.termsConditions || [],
-            mifosProductId: p.mifosProductId
+            mifosProductId: p.mifosProductId,
+            status: p.status,
+            utumishiSyncStatus: p.utumishiSyncStatus
         }));
         
         res.json({
