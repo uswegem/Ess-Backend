@@ -20,39 +20,58 @@ function inDateRange(value, from, to) {
   return (!from || value >= from) && (!to || value <= to);
 }
 
-// Interest actually earned to date - NOT summary.interestCharged, which is the full
-// life-of-loan scheduled interest total (every future installment included, however far out).
-// If a customer closes the loan today, everything past this point isn't ours - only interest
-// tied to periods that have already elapsed is. Computed from the repayment schedule: every
-// period whose due date has passed counts in full; the one period currently in progress
-// (fromDate <= today < dueDate) is prorated by elapsed/total days rather than either fully
-// included (overstates - counts days that haven't happened yet) or fully excluded
-// (understates - ignores real, already-elapsed accrual within that period).
-function calculateAccruedInterest(repaymentSchedule, today) {
-  const periods = repaymentSchedule?.periods || [];
-  let accrued = 0;
-  for (const period of periods) {
-    if (!period.dueDate || !period.fromDate) continue;
-    const from = mifosDate(period.fromDate);
-    const due = mifosDate(period.dueDate);
-    const interestDue = Number(period.interestDue || 0);
-    if (due <= today) {
-      accrued += interestDue;
-    } else if (from < today && today < due) {
-      const totalDays = (due - from) / 86400000;
-      const elapsedDays = (today - from) / 86400000;
-      accrued += totalDays > 0 ? interestDue * (elapsedDays / totalDays) : 0;
+// Interest actually earned as of a given date, cumulative from disbursement through
+// asOfDate. Two candidate figures, both computed from this loan's own posted transactions
+// (associations=transactions - NOT the repayment schedule, which is a pure calendar-time
+// snapshot with the same limitation described below):
+//   - accrual: sum of daily "Accrual" transactions' interestPortion up to asOfDate. This is
+//     Fineract's own real day-by-day accrual engine (confirmed running correctly on this
+//     deployment - not a broken/stale COB job), so it's the accurate answer to "how much
+//     interest has this loan earned purely through elapsed time".
+//   - paid: sum of "Repayment"/"Recovery Repayment" transactions' interestPortion up to
+//     asOfDate - interest actually collected.
+// The result is max(accrual, paid), not accrual alone: a customer who pays ahead of schedule
+// (confirmed on real loans this deployment - e.g. a customer paying 200,000/month against a
+// much smaller contractual installment) has genuinely already paid interest tied to periods
+// whose calendar time hasn't elapsed yet. Once collected, that interest is unambiguously
+// earned - a pure time-elapsed accrual model has no way to represent that, since it only
+// asks "how much time has passed", not "has this obligation already been settled". This
+// floor is a deliberate, considered design choice, not a stopgap - see docs/KNOWN_GAPS.md.
+function earnedInterestAsOf(transactions, asOfDate) {
+  let accrual = 0;
+  let paid = 0;
+  for (const t of (transactions || [])) {
+    const txDate = mifosDate(t.date);
+    if (!txDate || txDate > asOfDate) continue;
+    const typeValue = t.type?.value;
+    if (typeValue === 'Accrual') {
+      accrual += Number(t.interestPortion || 0);
+    } else if (typeValue === 'Repayment' || typeValue === 'Recovery Repayment') {
+      paid += Number(t.interestPortion || 0);
     }
-    // else: period hasn't started yet - none of its interest has accrued.
   }
-  return accrued;
+  return Math.max(accrual, paid);
+}
+
+// Range-scoped interest income: earnedInterestAsOf is a cumulative-since-disbursement
+// figure, so the amount earned strictly within [from, to] is the difference between the
+// cumulative totals at the two boundaries - not an independent sum over transactions dated
+// inside the window, which would double-count/misattribute at boundaries relative to the
+// lifetime figure. With from=null (or at/before disbursement), earnedInterestAsOf(from) is
+// 0 (no transactions exist that early), so this correctly reduces to the plain lifetime
+// figure - confirmed as a sanity check before shipping this.
+function earnedInterestInRange(transactions, from, to, today) {
+  const rangeTo = to || today;
+  const upToTo = earnedInterestAsOf(transactions, rangeTo);
+  const upToFrom = from ? earnedInterestAsOf(transactions, from) : 0;
+  return upToTo - upToFrom;
 }
 
 async function getMifosSummary({ from, to }) {
   const response = await cbsApi.get('/v1/loans', { params: { limit: 1000 } });
   const loans = response.data?.pageItems || [];
   const details = await Promise.all(loans.map(async (loan) => {
-    const result = await cbsApi.get(`/v1/loans/${loan.id}?associations=repaymentSchedule`);
+    const result = await cbsApi.get(`/v1/loans/${loan.id}?associations=transactions`);
     return result.data;
   }));
   const today = new Date();
@@ -89,13 +108,18 @@ async function getMifosSummary({ from, to }) {
     totalOutstandingPortfolio += principalOutstanding;
     principalPaidTotal += Number(summary.principalPaid || 0);
     interestPaidTotal += Number(summary.interestPaid || 0);
-    interestIncome += disbursedAt ? calculateAccruedInterest(loan.repaymentSchedule, today) : 0;
-    feeIncome += Number(summary.feeChargesCharged || 0);
+    interestIncome += earnedInterestInRange(loan.transactions, from, to, today);
     totalExpected += expectedRepayment;
     totalCollected += repayment;
     if (inDateRange(disbursedAt, from, to)) {
       disbursedCount += 1;
       disbursedAmount += principalDisbursed;
+      // Fee charges are one-time, disbursement-time events (confirmed - feeChargesCharged
+      // already equals feeChargesPaid exactly on every loan checked with real charges), not
+      // amortized like interest, so there's no "future fee" to guard against the way
+      // interest needed - only date-range scoping, via the same disbursedAt window Loans
+      // Disbursed already uses.
+      feeIncome += Number(summary.feeChargesCharged || 0);
     }
 
     const overdueSince = mifosDate(summary.overdueSinceDate);
@@ -183,20 +207,37 @@ class DashboardController {
         ...tenantFilter,
       };
 
-      const [totalLoans, loansByStatus, tenantUserCount, dailyApplications, pendingMessages, mifosSummary] = await Promise.all([
+      // ESS Summary (pendingEmployerApproval/activeLoans/etc.) is meant to respond to the
+      // selected date range, unlike loansByStatus below (which feeds the "Loans by Status"
+      // pie chart and successRate - lifetime, unscoped, not part of this fix) - so it needs
+      // its own createdAt-filtered aggregate rather than reusing loansByStatus's result.
+      const essLoanMatch = {
+        ...loanMatch,
+        ...((from || to) ? { createdAt: { ...(from && { $gte: from }), ...(to && { $lte: to }) } } : {})
+      };
+
+      const [totalLoans, loansByStatus, essStatusInRange, tenantUserCount, dailyApplications, pendingMessages, mifosSummary] = await Promise.all([
         db.collection('loanmappings').countDocuments(loanMatch),
         db.collection('loanmappings').aggregate([
           { $match: loanMatch },
+          { $group: { _id: '$status', count: { $sum: 1 }, totalAmount: { $sum: '$requestedAmount' } } }
+        ]).toArray(),
+        db.collection('loanmappings').aggregate([
+          { $match: essLoanMatch },
           { $group: { _id: '$status', count: { $sum: 1 }, totalAmount: { $sum: '$requestedAmount' } } }
         ]).toArray(),
         tenantFilter.tenantId
           ? TenantUser.countDocuments({ tenantId: tenantFilter.tenantId, isActive: true })
           : TenantUser.countDocuments({ isActive: true }),
         (() => {
-          const sevenDaysAgo = new Date();
-          sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+          // Falls back to a 7-day lookback only when no range is selected at all (matches
+          // this endpoint's pre-existing default behavior for callers that don't pass
+          // from/to) - otherwise genuinely uses the selected range instead of always
+          // hardcoding 7 days regardless of what was picked.
+          const defaultFrom = new Date();
+          defaultFrom.setDate(defaultFrom.getDate() - 7);
           return db.collection('loanmappings').aggregate([
-            { $match: { ...loanMatch, createdAt: { $gte: sevenDaysAgo } } },
+            { $match: { ...loanMatch, createdAt: { $gte: from || defaultFrom, ...(to && { $lte: to }) } } },
             {
               $group: {
                 _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
@@ -235,7 +276,7 @@ class DashboardController {
               count: item.count,
               totalAmount: item.totalAmount || 0
             })),
-            essSummary: buildEssLoanSummary(loansByStatus),
+            essSummary: buildEssLoanSummary(essStatusInRange),
             dailyApplications: dailyApplications.map((item) => ({
               date: item._id,
               applications: item.count,
@@ -321,12 +362,11 @@ class DashboardController {
   // the detail page always rendered empty.
   //
   // interest-income mirrors overview()'s miraCoreSummary.interestIncomeThisMonth exactly: both
-  // use calculateAccruedInterest() (interest actually earned to date, per the repayment
-  // schedule - NOT summary.interestCharged, the full life-of-loan scheduled total including
-  // every future installment). "This Month" in the card's label is aspirational, not real:
-  // accrued-to-date has no date-range breakdown available, so this list is lifetime-to-date
-  // per loan, same as the number it backs up. Not scoped by from/to, matching the summary
-  // card's own actual behavior rather than pretending otherwise.
+  // use earnedInterestInRange() (max of daily-accrual and actually-paid interest, per loan
+  // transaction history - NOT summary.interestCharged, the full life-of-loan scheduled total
+  // including every future installment). Now genuinely scoped by from/to (previously this
+  // list - like the summary card - was lifetime-to-date regardless of the label; that's fixed
+  // as part of the same change, see earnedInterestInRange's own comment).
   static async detail(req, res) {
     try {
       const tenantFilter = resolveTenantFilter(req);
@@ -338,13 +378,15 @@ class DashboardController {
       }
 
       const { metric } = req.params;
+      const from = req.query.from ? new Date(`${req.query.from}T00:00:00.000Z`) : null;
+      const to = req.query.to ? new Date(`${req.query.to}T23:59:59.999Z`) : null;
 
       if (metric === 'interest-income') {
         const response = await cbsApi.get('/v1/loans', { params: { limit: 1000 } });
         const loans = response.data?.pageItems || [];
         const today = new Date();
         const details = await Promise.all(loans.map(async (loan) => {
-          const result = await cbsApi.get(`/v1/loans/${loan.id}?associations=repaymentSchedule`);
+          const result = await cbsApi.get(`/v1/loans/${loan.id}?associations=transactions`);
           return result.data;
         }));
 
@@ -354,7 +396,7 @@ class DashboardController {
             date: mifosDate(loan.timeline?.actualDisbursementDate)?.toISOString().slice(0, 10) || null,
             loanAccountNo: loan.accountNo,
             clientName: loan.clientName,
-            amount: calculateAccruedInterest(loan.repaymentSchedule, today)
+            amount: earnedInterestInRange(loan.transactions, from, to, today)
           }))
           .filter((row) => row.amount > 0)
           .sort((a, b) => b.amount - a.amount);
