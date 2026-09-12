@@ -286,6 +286,58 @@ class DashboardController {
       res.status(500).json({ success: false, message: error.message });
     }
   }
+
+  // Drill-down rows behind a summary card. Currently only 'interest-income' is implemented -
+  // this route existed on the frontend (DashboardDetail.js has a full column config and calls
+  // this exact path) with nothing behind it on the backend at all, so every metric 404'd and
+  // the detail page always rendered empty.
+  //
+  // interest-income intentionally mirrors overview()'s miraCoreSummary.interestIncomeThisMonth
+  // exactly: both sum Fineract's summary.interestCharged (interest booked/accrued to date on
+  // the loan), not summary.interestPaid (interest actually collected) - "This Month" in the
+  // card's label is aspirational, not real: interestCharged is a lifetime-to-date figure with
+  // no date-range breakdown available from Fineract's loan summary alone, so this list is
+  // lifetime accrued interest per loan, same as the number it backs up. Not scoped by
+  // from/to, matching the summary card's own actual behavior rather than pretending otherwise.
+  static async detail(req, res) {
+    try {
+      const tenantFilter = resolveTenantFilter(req);
+      if (tenantFilter === null) {
+        return res.status(403).json({
+          success: false,
+          message: 'Tenant context required for dashboard detail.'
+        });
+      }
+
+      const { metric } = req.params;
+
+      if (metric === 'interest-income') {
+        const response = await cbsApi.get('/v1/loans', { params: { limit: 1000 } });
+        const loans = response.data?.pageItems || [];
+        const details = await Promise.all(loans.map(async (loan) => {
+          const result = await cbsApi.get(`/v1/loans/${loan.id}`);
+          return result.data;
+        }));
+
+        const rows = details
+          .map((loan) => ({
+            date: mifosDate(loan.timeline?.actualDisbursementDate)?.toISOString().slice(0, 10) || null,
+            loanAccountNo: loan.accountNo,
+            clientName: loan.clientName,
+            amount: Number(loan.summary?.interestCharged || 0)
+          }))
+          .filter((row) => row.amount > 0)
+          .sort((a, b) => b.amount - a.amount);
+
+        return res.json({ success: true, data: { rows } });
+      }
+
+      return res.json({ success: true, data: { rows: [] } });
+    } catch (error) {
+      logger.error('Dashboard detail error:', error);
+      res.status(500).json({ success: false, message: error.message });
+    }
+  }
 }
 
 module.exports = DashboardController;

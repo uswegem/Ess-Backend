@@ -47,4 +47,18 @@ router.get('/activity', DashboardController.activity);
  */
 router.get('/messages', DashboardController.messages);
 
+/**
+ * @swagger
+ * /api/v1/dashboard/detail/{metric}:
+ *   get:
+ *     summary: Drill-down rows backing a dashboard summary card
+ *     tags: [Health & Monitoring]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Row-level detail for the given metric
+ */
+router.get('/detail/:metric', DashboardController.detail);
+
 module.exports = router;
