@@ -20,11 +20,39 @@ function inDateRange(value, from, to) {
   return (!from || value >= from) && (!to || value <= to);
 }
 
+// Interest actually earned to date - NOT summary.interestCharged, which is the full
+// life-of-loan scheduled interest total (every future installment included, however far out).
+// If a customer closes the loan today, everything past this point isn't ours - only interest
+// tied to periods that have already elapsed is. Computed from the repayment schedule: every
+// period whose due date has passed counts in full; the one period currently in progress
+// (fromDate <= today < dueDate) is prorated by elapsed/total days rather than either fully
+// included (overstates - counts days that haven't happened yet) or fully excluded
+// (understates - ignores real, already-elapsed accrual within that period).
+function calculateAccruedInterest(repaymentSchedule, today) {
+  const periods = repaymentSchedule?.periods || [];
+  let accrued = 0;
+  for (const period of periods) {
+    if (!period.dueDate || !period.fromDate) continue;
+    const from = mifosDate(period.fromDate);
+    const due = mifosDate(period.dueDate);
+    const interestDue = Number(period.interestDue || 0);
+    if (due <= today) {
+      accrued += interestDue;
+    } else if (from < today && today < due) {
+      const totalDays = (due - from) / 86400000;
+      const elapsedDays = (today - from) / 86400000;
+      accrued += totalDays > 0 ? interestDue * (elapsedDays / totalDays) : 0;
+    }
+    // else: period hasn't started yet - none of its interest has accrued.
+  }
+  return accrued;
+}
+
 async function getMifosSummary({ from, to }) {
   const response = await cbsApi.get('/v1/loans', { params: { limit: 1000 } });
   const loans = response.data?.pageItems || [];
   const details = await Promise.all(loans.map(async (loan) => {
-    const result = await cbsApi.get(`/v1/loans/${loan.id}`);
+    const result = await cbsApi.get(`/v1/loans/${loan.id}?associations=repaymentSchedule`);
     return result.data;
   }));
   const today = new Date();
@@ -61,7 +89,7 @@ async function getMifosSummary({ from, to }) {
     totalOutstandingPortfolio += principalOutstanding;
     principalPaidTotal += Number(summary.principalPaid || 0);
     interestPaidTotal += Number(summary.interestPaid || 0);
-    interestIncome += Number(summary.interestCharged || 0);
+    interestIncome += disbursedAt ? calculateAccruedInterest(loan.repaymentSchedule, today) : 0;
     feeIncome += Number(summary.feeChargesCharged || 0);
     totalExpected += expectedRepayment;
     totalCollected += repayment;
@@ -292,13 +320,13 @@ class DashboardController {
   // this exact path) with nothing behind it on the backend at all, so every metric 404'd and
   // the detail page always rendered empty.
   //
-  // interest-income intentionally mirrors overview()'s miraCoreSummary.interestIncomeThisMonth
-  // exactly: both sum Fineract's summary.interestCharged (interest booked/accrued to date on
-  // the loan), not summary.interestPaid (interest actually collected) - "This Month" in the
-  // card's label is aspirational, not real: interestCharged is a lifetime-to-date figure with
-  // no date-range breakdown available from Fineract's loan summary alone, so this list is
-  // lifetime accrued interest per loan, same as the number it backs up. Not scoped by
-  // from/to, matching the summary card's own actual behavior rather than pretending otherwise.
+  // interest-income mirrors overview()'s miraCoreSummary.interestIncomeThisMonth exactly: both
+  // use calculateAccruedInterest() (interest actually earned to date, per the repayment
+  // schedule - NOT summary.interestCharged, the full life-of-loan scheduled total including
+  // every future installment). "This Month" in the card's label is aspirational, not real:
+  // accrued-to-date has no date-range breakdown available, so this list is lifetime-to-date
+  // per loan, same as the number it backs up. Not scoped by from/to, matching the summary
+  // card's own actual behavior rather than pretending otherwise.
   static async detail(req, res) {
     try {
       const tenantFilter = resolveTenantFilter(req);
@@ -314,17 +342,19 @@ class DashboardController {
       if (metric === 'interest-income') {
         const response = await cbsApi.get('/v1/loans', { params: { limit: 1000 } });
         const loans = response.data?.pageItems || [];
+        const today = new Date();
         const details = await Promise.all(loans.map(async (loan) => {
-          const result = await cbsApi.get(`/v1/loans/${loan.id}`);
+          const result = await cbsApi.get(`/v1/loans/${loan.id}?associations=repaymentSchedule`);
           return result.data;
         }));
 
         const rows = details
+          .filter((loan) => mifosDate(loan.timeline?.actualDisbursementDate))
           .map((loan) => ({
             date: mifosDate(loan.timeline?.actualDisbursementDate)?.toISOString().slice(0, 10) || null,
             loanAccountNo: loan.accountNo,
             clientName: loan.clientName,
-            amount: Number(loan.summary?.interestCharged || 0)
+            amount: calculateAccruedInterest(loan.repaymentSchedule, today)
           }))
           .filter((row) => row.amount > 0)
           .sort((a, b) => b.amount - a.amount);
