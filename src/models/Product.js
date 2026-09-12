@@ -1,5 +1,35 @@
 const mongoose = require('mongoose');
 
+// Shared conditional-required validator: these fields are mandatory for a real, submittable
+// product (status: 'active') but genuinely optional while status: 'draft' - a draft exists
+// specifically to be saved incomplete and finished later.
+//
+// Works correctly in both validation contexts this schema is validated under:
+//  - `.save()` (POST /products) - `this` is the document itself, so `this.status` is read
+//    directly.
+//  - `findOneAndUpdate` with `runValidators: true` (PUT /products/:id) - `this` is the Query,
+//    not the document, UNLESS `context: 'query'` is also passed (which the PUT route does).
+//    Under that context, sibling fields being written in the same update are read via
+//    `this.get(field)`, not `this.field` directly.
+//
+// Caveat: this reads the *incoming* status being written, not the document's current stored
+// status - if a future PUT call updates other fields without including `status` in its body,
+// `this.get('status')` returns undefined here and these fields are treated as not-required for
+// that call. Every current caller (updateProduct() in the frontend) always sends `status`
+// (buildProductPayload defaults it to 'active'), so this doesn't bite today, but a future
+// partial-update caller that omits `status` needs to be aware of this.
+function requiredWhenActive() {
+  const status = typeof this.get === 'function' ? this.get('status') : this.status;
+  return status === 'active';
+}
+
+// Kept in sync with every field above whose `required` is requiredWhenActive - used by the
+// findOneAndUpdate whole-document check below, since Mongoose's per-path update validators
+// alone aren't enough here (see that hook's comment for why).
+const REQUIRED_WHEN_ACTIVE_FIELDS = [
+  'deductionCode', 'productName', 'minTenure', 'maxTenure', 'interestRate', 'minAmount', 'maxAmount'
+];
+
 const termsConditionSchema = new mongoose.Schema({
   termsConditionNumber: {
     type: String,
@@ -42,34 +72,34 @@ const productSchema = new mongoose.Schema({
   },
   deductionCode: {
     type: String,
-    required: true,
+    required: requiredWhenActive,
     index: true
   },
-  
+
   // Product details
   productName: {
     type: String,
-    required: true
+    required: requiredWhenActive
   },
   productDescription: {
     type: String
   },
-  
+
   // Tenure configuration
   minTenure: {
     type: Number,
-    required: true,
+    required: requiredWhenActive,
     min: 1
   },
   maxTenure: {
     type: Number,
-    required: true
+    required: requiredWhenActive
   },
-  
+
   // Rate configuration (percentages)
   interestRate: {
     type: Number,
-    required: true
+    required: requiredWhenActive
   },
   processingFee: {
     type: Number,
@@ -79,15 +109,15 @@ const productSchema = new mongoose.Schema({
     type: Number,
     default: 0
   },
-  
+
   // Amount limits
   minAmount: {
     type: Number,
-    required: true
+    required: requiredWhenActive
   },
   maxAmount: {
     type: Number,
-    required: true
+    required: requiredWhenActive
   },
   
   // Repayment configuration
@@ -123,7 +153,17 @@ const productSchema = new mongoose.Schema({
   // Terms and conditions
   termsConditions: [termsConditionSchema],
   
-  // Status
+  // Workflow status - draft (still being filled in, not yet a real usable product) vs
+  // active (fully saved/submittable). Separate from isActive below, which is a soft-delete
+  // flag applied to either status, not a workflow state.
+  status: {
+    type: String,
+    enum: ['draft', 'active'],
+    default: 'active',
+    index: true
+  },
+
+  // Soft-delete flag
   isActive: {
     type: Boolean,
     default: true
@@ -149,6 +189,47 @@ const productSchema = new mongoose.Schema({
   }
 }, {
   timestamps: true
+});
+
+// Mongoose's findOneAndUpdate + runValidators only validates the paths actually present in
+// that update's $set - it does NOT re-validate the full resulting document. So an update that
+// only sets { status: 'active' } on a draft that's still missing productName/minTenure/etc.
+// sails through per-path validation with nothing to say no, even though the field-level
+// requiredWhenActive validators above are working exactly as designed for the paths they
+// actually see. This hook closes that gap: whenever an update would result in status being
+// 'active', it fetches the current document, merges in this update, and rejects if any
+// required-when-active field is still missing from the merged result - the same guarantee
+// `.save()` gets for free by validating the whole document every time.
+productSchema.pre('findOneAndUpdate', async function(next) {
+  const update = this.getUpdate() || {};
+  const setOps = update.$set || update;
+  const newStatus = setOps.status;
+
+  // Only the transition INTO active needs this extra check - .save() already validates a
+  // full draft-or-active document correctly on its own, and an update that isn't touching
+  // status/doesn't result in active doesn't need the merged-document check at all.
+  if (newStatus !== 'active') {
+    return next();
+  }
+
+  try {
+    const existing = await this.model.findOne(this.getQuery()).lean();
+    const missing = REQUIRED_WHEN_ACTIVE_FIELDS.filter((field) => {
+      const incoming = setOps[field];
+      const effective = incoming !== undefined ? incoming : existing?.[field];
+      return effective === undefined || effective === null || effective === '';
+    });
+
+    if (missing.length > 0) {
+      return next(new Error(
+        `Cannot activate product: missing required field(s): ${missing.join(', ')}`
+      ));
+    }
+
+    return next();
+  } catch (err) {
+    return next(err);
+  }
 });
 
 // Index for efficient queries

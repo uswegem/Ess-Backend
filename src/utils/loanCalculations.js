@@ -180,15 +180,32 @@ class LoanCalculations {
   }
 
   /**
-   * Calculate loan charges breakdown
+   * Calculate loan charges breakdown.
+   *
+   * `rates` is required and must come from the live Fineract product (see
+   * services/mifosProductRates.js) - this function no longer falls back to
+   * LOAN_CONSTANTS's global defaults. A quote computed against the wrong (stale/global)
+   * rate is a worse outcome than a rejected quote, so callers must resolve real rates
+   * first and pass them in; there is no silent default here.
+   *
    * @param {number} loanAmount - Principal loan amount
+   * @param {object} rates
+   * @param {number} rates.processingFeeRate - as a fraction, e.g. 0.02 for 2%
+   * @param {number} rates.insuranceRate - as a fraction, e.g. 0.0075 for 0.75%
+   * @param {number} rates.otherCharges - flat TZS amount
    * @returns {object} Breakdown of charges
    */
-  static calculateCharges(loanAmount) {
+  static calculateCharges(loanAmount, rates) {
+    if (!rates || rates.processingFeeRate == null || rates.insuranceRate == null || rates.otherCharges == null) {
+      throw new Error(
+        'calculateCharges requires explicit { processingFeeRate, insuranceRate, otherCharges } - ' +
+        'resolve these from the live Fineract product (services/mifosProductRates.js) rather than relying on a default'
+      );
+    }
     return {
-      processingFee: round2(loanAmount * (LOAN_CONSTANTS?.ADMIN_FEE_RATE || 0.02)),
-      insurance: round2(loanAmount * (LOAN_CONSTANTS?.INSURANCE_RATE || 0.015)),
-      otherCharges: LOAN_CONSTANTS?.OTHER_CHARGES || 50000
+      processingFee: round2(loanAmount * rates.processingFeeRate),
+      insurance: round2(loanAmount * rates.insuranceRate),
+      otherCharges: rates.otherCharges
     };
   }
 

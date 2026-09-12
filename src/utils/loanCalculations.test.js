@@ -35,10 +35,18 @@ describe('LoanCalculations core', () => {
 
   test('calculateCharges returns object with fees', () => {
     const principal = 1_000_000;
-    const charges = LoanCalculations.calculateCharges(principal);
+    const charges = LoanCalculations.calculateCharges(principal, {
+      processingFeeRate: 0.02,
+      insuranceRate: 0.0075,
+      otherCharges: 50000
+    });
     expect(charges.processingFee).toBeGreaterThan(0);
     expect(charges.insurance).toBeGreaterThan(0);
     expect(charges.otherCharges).toBeDefined();
+  });
+
+  test('calculateCharges throws without explicit rates (fails closed, no LOAN_CONSTANTS fallback)', () => {
+    expect(() => LoanCalculations.calculateCharges(1_000_000)).toThrow();
   });
 
   test('amortizationSchedule sums correctly', async () => {

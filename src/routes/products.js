@@ -9,6 +9,8 @@ const multer = require('multer');
 const csv = require('csv-parser');
 const { Readable } = require('stream');
 const Product = require('../models/Product');
+const LoanMapping = require('../models/LoanMapping');
+const AuditLog = require('../models/AuditLog');
 const { authMiddleware, roleMiddleware, permissionMiddleware } = require('../middleware/authMiddleware');
 const { buildTenantQuery, buildTenantListQuery } = require('../utils/tenantQuery');
 const logger = require('../utils/logger');
@@ -271,11 +273,14 @@ const productWriteGuards = [
  */
 router.get('/', authMiddleware, async (req, res) => {
   try {
-    const { active, limit = 100, offset = 0 } = req.query;
-    
+    const { active, status, limit = 100, offset = 0 } = req.query;
+
     const query = scopedListQuery(req, {});
     if (active !== undefined) {
       query.isActive = active === 'true';
+    }
+    if (status !== undefined) {
+      query.status = status;
     }
     
     const products = await Product.find(query)
@@ -344,7 +349,8 @@ router.post('/', ...productWriteGuards, async (req, res) => {
       forExecutive,
       shariaFacility,
       termsConditions,
-      mifosProductId
+      mifosProductId,
+      status
     } = req.body;
     
     // Check if product code already exists
@@ -378,6 +384,7 @@ router.post('/', ...productWriteGuards, async (req, res) => {
       shariaFacility: shariaFacility || false,
       termsConditions: termsConditions || [],
       mifosProductId,
+      status: status || 'active',
       createdBy: req.user?.userId,
       fspCode: req.tenant?.fspCode || process.env.FSP_CODE || 'FL8090',
       ...(req.tenant?.tenantId && {
@@ -413,7 +420,12 @@ router.put('/:id', ...productWriteGuards, async (req, res) => {
     const product = await Product.findOneAndUpdate(
       scopedItemQuery(req, req.params.id),
       { $set: updates },
-      { new: true, runValidators: true }
+      // context: 'query' is required for Product's conditional required-when-active
+      // validators (requiredWhenActive in the model) to see the incoming `status` via
+      // `this.get('status')` during this update - without it, `this` inside a
+      // findOneAndUpdate validator isn't the document, and those checks would silently
+      // never see the update's status.
+      { new: true, runValidators: true, context: 'query' }
     );
     
     if (!product) {
@@ -439,18 +451,49 @@ router.put('/:id', ...productWriteGuards, async (req, res) => {
  */
 router.delete('/:id', ...productWriteGuards, async (req, res) => {
   try {
+    const existingProduct = await Product.findOne(scopedItemQuery(req, req.params.id)).lean();
+    if (!existingProduct) {
+      return res.status(404).json({ success: false, message: 'Product not found' });
+    }
+
+    // Deleting a product this way means isActive: false - the same state productResolver.js
+    // and mifosProductRates.js require for rate lookups. A product with real loans still
+    // referencing its productCode would silently break those lookups (e.g. a restructure on
+    // an existing loan) the moment it's deactivated, so block deletion entirely rather than
+    // let that happen - decommissioning (a distinct, Utumishi-facing flow) is the correct path
+    // for a product that's genuinely done but still has loan history against it.
+    const hasLoanReferences = await LoanMapping.exists({
+      productCode: existingProduct.productCode,
+      ...(existingProduct.tenantId ? { tenantId: existingProduct.tenantId } : {})
+    });
+    if (hasLoanReferences) {
+      return res.status(409).json({
+        success: false,
+        message: 'This product has active loans and cannot be deleted - decommission it instead.'
+      });
+    }
+
     const product = await Product.findOneAndUpdate(
       scopedItemQuery(req, req.params.id),
       { $set: { isActive: false, updatedBy: req.user?.userId } },
       { new: true }
     );
-    
+
     if (!product) {
       return res.status(404).json({ success: false, message: 'Product not found' });
     }
-    
+
     logger.info(`Product deactivated: ${product.productCode} by ${req.user?.username}`);
-    
+
+    await AuditLog.create({
+      action: 'delete_product',
+      description: `Product ${product.productCode} (${product.productName || 'unnamed'}) deleted`,
+      userId: req.user?.userId,
+      tenantId: product.tenantId,
+      status: 'success',
+      metadata: { productId: product._id, productCode: product.productCode }
+    });
+
     res.json({
       success: true,
       message: 'Product deactivated successfully'

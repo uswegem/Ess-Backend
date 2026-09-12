@@ -7,6 +7,7 @@ const loanCalculations = require('../../utils/loanCalculations');
 const LoanMappingService = require('../../services/loanMappingService');
 const PossibleLoanCharges = require('../../models/PossibleLoanCharges');
 const { getActiveTenantContext } = require('../../utils/tenantContext');
+const { getMifosProductRates } = require('../../services/mifosProductRates');
 
 // Import loanUtils functions directly to avoid path issues
 const path = require('path');
@@ -39,8 +40,15 @@ const handleLoanChargesRequest = async (parsedData, res) => {
         // Determine affordability type based on presence of RequestedAmount
         const affordabilityType = (requestedAmount === null || requestedAmount === 0) ? 'REVERSE' : 'FORWARD';
 
-        // Set interest rate from constants
-        const interestRate = LOAN_CONSTANTS.DEFAULT_INTEREST_RATE;
+        // Interest rate and charge percentages come from the live Fineract loan product,
+        // not from LOAN_CONSTANTS - this is the rate that will actually be booked, so it's
+        // the only one worth quoting. Fails closed (throws, caught below) if Fineract is
+        // unreachable or the product's rates/charges aren't configured as expected, rather
+        // than silently substituting a default that may not match what Fineract will do.
+        const productCode = messageDetails.ProductCode || '17';
+        const tenantId = getActiveTenantContext()?.tenantId || null;
+        const productRates = await getMifosProductRates(productCode, tenantId);
+        const interestRate = productRates.interestRatePerPeriod;
 
         // Set defaults and validate tenure
         if (requestedTenure === null || requestedTenure === 0) {
@@ -160,8 +168,8 @@ const handleLoanChargesRequest = async (parsedData, res) => {
             
             // Step 1: Calculate what gross amount would be needed to achieve the requested net amount
             // Formula: GrossAmount = NetAmount / (1 - totalFeeRate)
-            const totalFeeRate = (LOAN_CONSTANTS?.ADMIN_FEE_RATE || 0.02) + (LOAN_CONSTANTS?.INSURANCE_RATE || 0.015);
-            const otherChargesAmount = LOAN_CONSTANTS?.OTHER_CHARGES || 50000;
+            const totalFeeRate = productRates.processingFeeRate + productRates.insuranceRate;
+            const otherChargesAmount = LOAN_CONSTANTS?.OTHER_CHARGES ?? 0;
             
             // Calculate required gross amount: (RequestedNet + OtherCharges) / (1 - percentageFees)
             const requiredGrossAmount = (requestedAmount + otherChargesAmount) / (1 - totalFeeRate);
@@ -200,7 +208,11 @@ const handleLoanChargesRequest = async (parsedData, res) => {
         eligibleAmount = Math.max(eligibleAmount, MIN_LOAN_AMOUNT);
 
         // Calculate charges modularly using eligibleAmount
-        const charges = loanCalculations.calculateCharges(eligibleAmount);
+        const charges = loanCalculations.calculateCharges(eligibleAmount, {
+            processingFeeRate: productRates.processingFeeRate,
+            insuranceRate: productRates.insuranceRate,
+            otherCharges: LOAN_CONSTANTS?.OTHER_CHARGES ?? 0
+        });
         const totalProcessingFees = charges.processingFee;
         const totalInsurance = charges.insurance;
         const otherCharges = charges.otherCharges;

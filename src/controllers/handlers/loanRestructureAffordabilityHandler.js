@@ -6,6 +6,8 @@ const LOAN_CONSTANTS = require('../../utils/loanConstants');
 const loanCalculations = require('../../utils/loanCalculations');
 const LoanMapping = require('../../models/LoanMapping');
 const cbsApi = require('../../services/cbs.api');
+const { getActiveTenantContext } = require('../../utils/tenantContext');
+const { getMifosProductRates } = require('../../services/mifosProductRates');
 
 /**
  * Handle LOAN_RESTRUCTURE_AFFORDABILITY_REQUEST
@@ -95,8 +97,21 @@ const handleLoanRestructureAffordabilityRequest = async (parsedData, res) => {
         const providedTenure = messageDetails.Tenure !== undefined ? parseInt(messageDetails.Tenure) : 0;
         const providedEMI = messageDetails.DesiredDeductibleAmount !== undefined ? parseFloat(messageDetails.DesiredDeductibleAmount) : 0;
         
-        // Interest rate from constants
-        const interestRate = LOAN_CONSTANTS.DEFAULT_INTEREST_RATE;
+        // Interest rate: use this specific loan's own actual contracted rate from Fineract
+        // (not a fresh product lookup, and not LOAN_CONSTANTS) - a restructure recalculates
+        // against the terms this loan was actually booked at, which may differ from whatever
+        // the product's current default rate is if it's been edited since. Fails closed if
+        // Fineract's loan record doesn't carry a rate, rather than guessing.
+        const interestRate = mifosLoan.interestRatePerPeriod;
+        if (interestRate == null) {
+            logger.error(`MIFOS loan ${loanMapping.mifosLoanId} has no interestRatePerPeriod`);
+            return sendErrorResponse(res, '8016', 'Loan interest rate not available from MIFOS', 'xml', parsedData);
+        }
+
+        // Processing fee / insurance percentages still come from the live product config
+        // (charges aren't part of the loan's own summary in a directly reusable %-rate form).
+        const tenantId = getActiveTenantContext()?.tenantId || null;
+        const productRates = await getMifosProductRates(loanMapping.productCode, tenantId);
         const maxTenure = LOAN_CONSTANTS.MAX_TENURE || 96;
         
         let calculatedTenure = 0;
@@ -140,7 +155,11 @@ const handleLoanRestructureAffordabilityRequest = async (parsedData, res) => {
         }
 
         // Calculate charges on the loan amount
-        const charges = loanCalculations.calculateCharges(loanAmount);
+        const charges = loanCalculations.calculateCharges(loanAmount, {
+            processingFeeRate: productRates.processingFeeRate,
+            insuranceRate: productRates.insuranceRate,
+            otherCharges: LOAN_CONSTANTS?.OTHER_CHARGES ?? 0
+        });
         const totalProcessingFees = charges.processingFee;
         const totalInsurance = charges.insurance;
         const otherCharges = charges.otherCharges;

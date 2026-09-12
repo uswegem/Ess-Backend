@@ -9,6 +9,8 @@ const LoanCalculations = require('../../utils/loanCalculations');
 const { generateLoanNumber, generateFSPReferenceNumber } = require('../../utils/loanUtils');
 const LoanMappingService = require('../../services/loanMappingService');
 const cbsApi = require('../../services/cbs.api');
+const { getActiveTenantContext } = require('../../utils/tenantContext');
+const { getMifosProductRates } = require('../../services/mifosProductRates');
 
 // Helper function to calculate monthly installment
 const calculateMonthlyInstallment = LoanCalculations.calculateMonthlyInstallment.bind(LoanCalculations);
@@ -164,8 +166,14 @@ async function handleTopUpOfferRequestAuto(parsedData, res, clientData, loanData
                 // Determine loan amount
                 let requestedAmount = parseFloat(messageDetails.RequestedAmount) || 0;
                 const maxAffordableEMI = parseFloat(messageDetails.DesiredDeductibleAmount || messageDetails.DeductibleAmount || messageDetails.OneThirdAmount || 0);
-                
-                const interestRate = LOAN_CONSTANTS.DEFAULT_INTEREST_RATE;
+
+                // Rate and charge percentages come from the live Fineract product, not
+                // LOAN_CONSTANTS - fails closed (throws, caught by this block's callbackError
+                // catch) if Fineract is unreachable or the product isn't configured as expected.
+                const offerProductCode = messageDetails.ProductCode || '17';
+                const offerTenantId = getActiveTenantContext()?.tenantId || null;
+                const offerProductRates = await getMifosProductRates(offerProductCode, offerTenantId);
+                const interestRate = offerProductRates.interestRatePerPeriod;
                 
                 // Calculate or adjust loan amount based on affordability
                 if (requestedAmount > 0 && maxAffordableEMI > 0) {
@@ -185,7 +193,11 @@ async function handleTopUpOfferRequestAuto(parsedData, res, clientData, loanData
                 
                 const loanAmount = requestedAmount;
                 const totalInterestRateAmount = await LoanCalculations.calculateTotalInterest(loanAmount, interestRate, offerTenure);
-                const charges = LoanCalculations.calculateCharges(loanAmount);
+                const charges = LoanCalculations.calculateCharges(loanAmount, {
+                    processingFeeRate: offerProductRates.processingFeeRate,
+                    insuranceRate: offerProductRates.insuranceRate,
+                    otherCharges: LOAN_CONSTANTS?.OTHER_CHARGES ?? 0
+                });
                 const totalAmountToPay = loanAmount + totalInterestRateAmount;
                 const otherCharges = charges.otherCharges;
                 const loanNumber = generateLoanNumber();
@@ -415,8 +427,13 @@ const handleLoanOfferRequest = async (parsedData, res) => {
 
         let requestedAmount = messageDetails.RequestedAmount || 0;
 
-        // Use consistent interest rate from constants
-        const interestRate = LOAN_CONSTANTS.DEFAULT_INTEREST_RATE;
+        // Rate and charge percentages come from the live Fineract product, not
+        // LOAN_CONSTANTS - fails closed (throws, caught by this handler's outer catch) if
+        // Fineract is unreachable or the product isn't configured as expected.
+        const mainOfferProductCode = messageDetails.ProductCode || '17';
+        const mainOfferTenantId = getActiveTenantContext()?.tenantId || null;
+        const mainOfferProductRates = await getMifosProductRates(mainOfferProductCode, mainOfferTenantId);
+        const interestRate = mainOfferProductRates.interestRatePerPeriod;
         
         // If requested amount is provided, validate it doesn't exceed affordability
         if (requestedAmount > 0 && maxAffordableEMI > 0) {
@@ -461,7 +478,11 @@ const handleLoanOfferRequest = async (parsedData, res) => {
 
         // Use same calculation logic as LOAN_CHARGES_REQUEST
         const totalInterestRateAmount = await LoanCalculations.calculateTotalInterest(loanAmount, offerInterestRate, tenure);
-        const charges = LoanCalculations.calculateCharges(loanAmount);
+        const charges = LoanCalculations.calculateCharges(loanAmount, {
+            processingFeeRate: mainOfferProductRates.processingFeeRate,
+            insuranceRate: mainOfferProductRates.insuranceRate,
+            otherCharges: LOAN_CONSTANTS?.OTHER_CHARGES ?? 0
+        });
         const totalProcessingFees = charges.processingFee;
         const totalInsurance = charges.insurance;
         const otherCharges = charges.otherCharges;

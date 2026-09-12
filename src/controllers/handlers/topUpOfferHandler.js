@@ -6,6 +6,8 @@ const { getMessageId } = require('../../utils/messageIdGenerator');
 const LOAN_CONSTANTS = require('../../utils/loanConstants');
 const { generateLoanNumber, generateFSPReferenceNumber } = require('../../utils/loanUtils');
 const LoanMappingService = require('../../services/loanMappingService');
+const { getActiveTenantContext } = require('../../utils/tenantContext');
+const { getMifosProductRates } = require('../../services/mifosProductRates');
 
 /**
  * Handle TOP_UP_OFFER_REQUEST
@@ -91,13 +93,21 @@ const handleTopUpOfferRequest = async (parsedData, res) => {
                 
                 // Generate loan details for top-up (use similar logic to LOAN_OFFER_REQUEST)
                 const loanAmount = parseFloat(messageDetails.RequestedAmount) || LOAN_CONSTANTS.MIN_LOAN_AMOUNT;
-                const interestRate = 24.0; // 24% per annum (same as regular loans)
+
+                // Interest rate comes from the live Fineract product, not a hardcoded literal -
+                // fails closed (throws, caught by this block's own catch below) if Fineract is
+                // unreachable or the product isn't configured as expected.
+                const topUpProductCode = messageDetails.ProductCode || '17';
+                const topUpTenantId = getActiveTenantContext()?.tenantId || null;
+                const topUpProductRates = await getMifosProductRates(topUpProductCode, topUpTenantId);
+                const interestRate = topUpProductRates.interestRatePerPeriod;
+
                 const tenure = parseInt(messageDetails.Tenure) || LOAN_CONSTANTS.MAX_TENURE;
                 
                 // Calculate total amount to pay
                 const totalInterestRateAmount = (loanAmount * interestRate * tenure) / (12 * 100);
                 const totalAmountToPay = loanAmount + totalInterestRateAmount;
-                const otherCharges = LOAN_CONSTANTS?.OTHER_CHARGES || 50000;
+                const otherCharges = LOAN_CONSTANTS?.OTHER_CHARGES ?? 0;
                 const loanNumber = generateLoanNumber();
                 const fspReferenceNumber = generateFSPReferenceNumber();
                 

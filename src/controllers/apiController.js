@@ -17,6 +17,8 @@ const LOAN_CONSTANTS = require('../utils/loanConstants');
 const LoanCalculations = require('../utils/loanCalculations');
 const { API_ENDPOINTS } = require('../services/cbs.endpoints');
 const { rejectLoan, cancelLoan, completeLoan, setWaitingForLiquidation } = require('../utils/loanStatusHelpers');
+const { getActiveTenantContext } = require('../utils/tenantContext');
+const { getMifosProductRates } = require('../services/mifosProductRates');
 
 // Enhanced CBS services
 const { authManager, healthMonitor, errorHandler, requestManager } = cbsApi;
@@ -705,11 +707,19 @@ const handleLoanFinalApproval = async (parsedData, res) => {
                                     if (isTakeover && takeOverAmount > 0) {
                                         logger.info(`🔄 Creating TAKEOVER loan - Total: ${loanAmount}, TakeOver Amount: ${takeOverAmount}, Net to Customer: ${loanAmount - takeOverAmount}`);
                                     }
-                                    
+
+                                    // Resolve the real product/rate to book this loan at from Fineract itself -
+                                    // not the hardcoded literals this used to carry. Fails closed (throws) if
+                                    // Fineract is unreachable or the product isn't configured as expected, rather
+                                    // than booking at a rate that may no longer match the real product.
+                                    const bookingProductCode = existingMapping?.productCode || messageDetails.ProductCode || '17';
+                                    const bookingTenantId = getActiveTenantContext()?.tenantId || null;
+                                    const bookingProductRates = await getMifosProductRates(bookingProductCode, bookingTenantId);
+
                                     // Create loan in CBS
                                     const loanPayload = {
                                         clientId: clientId,
-                                        productId: 17, // ESS Loan product
+                                        productId: bookingProductRates.mifosProductId,
                                         principal: loanAmount.toString(),
                                         loanTermFrequency: parseInt(loanTenure),
                                         loanTermFrequencyType: 2, // Months
@@ -717,7 +727,7 @@ const handleLoanFinalApproval = async (parsedData, res) => {
                                         numberOfRepayments: parseInt(loanTenure),
                                         repaymentEvery: 1,
                                         repaymentFrequencyType: 2, // Monthly
-                                        interestRatePerPeriod: 24, // 24% per year (matching product config)
+                                        interestRatePerPeriod: bookingProductRates.interestRatePerPeriod,
                                         interestRateFrequencyType: 3, // Per year
                                         amortizationType: 1, // Equal installments
                                         interestType: 0, // Declining balance

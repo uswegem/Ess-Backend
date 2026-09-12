@@ -35,7 +35,8 @@ const auditLogSchema = new mongoose.Schema({
       'onboarding_submit', 'onboarding_review', 'tenant_user_create',
       'certificate_upload', 'certificate_delete',
       'runtime_tenant_create', 'runtime_tenant_update', 'runtime_tenant_provision',
-      'runtime_tenant_bootstrap', 'runtime_tenant_activate'
+      'runtime_tenant_bootstrap', 'runtime_tenant_activate',
+      'delete_product'
     ]
   },
   description: {

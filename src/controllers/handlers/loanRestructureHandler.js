@@ -4,6 +4,7 @@ const digitalSignature = require('../../utils/signatureUtils');
 const { getMessageId } = require('../../utils/messageIdGenerator');
 const LoanMapping = require('../../models/LoanMapping');
 const AuditLog = require('../../models/AuditLog');
+const LOAN_CONSTANTS = require('../../utils/loanConstants');
 
 /**
  * Handle LOAN_RESTRUCTURE_REQUEST
@@ -139,10 +140,18 @@ const handleLoanRestructureRequest = async (parsedData, res) => {
         // Step 2: Calculate restructured loan details
         logger.info('🧮 Calculating restructured loan details...');
         
-        const interestRate = 24.0; // 24% per annum (same as regular loans)
+        // Use this specific loan's own actual contracted rate from Fineract (already fetched
+        // above as mifosLoan) rather than a hardcoded literal or a fresh product lookup - a
+        // restructure recalculates against the terms this loan was actually booked at.
+        const interestRate = mifosLoan.interestRatePerPeriod;
+        if (interestRate == null) {
+            throw new Error(`MIFOS loan ${loanMapping.mifosLoanId} has no interestRatePerPeriod`);
+        }
         const totalInterestRateAmount = (requestedAmount * interestRate * tenure) / (12 * 100);
         const totalAmountToPay = requestedAmount + totalInterestRateAmount;
-        const otherCharges = 50000; // Standard charges
+        // No longer an independent literal - reads the same constant every other charges
+        // call site uses, so the two can no longer silently drift apart.
+        const otherCharges = LOAN_CONSTANTS?.OTHER_CHARGES ?? 0;
 
         logger.info('Calculated restructure details:', {
             existingLoanAmount,
