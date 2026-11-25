@@ -61,4 +61,18 @@ router.get('/messages', DashboardController.messages);
  */
 router.get('/detail/:metric', DashboardController.detail);
 
+/**
+ * @swagger
+ * /api/v1/dashboard/detail/{metric}/export/pdf:
+ *   get:
+ *     summary: PDF export of the full (unpaginated) drill-down row set for a metric
+ *     tags: [Health & Monitoring]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: PDF file
+ */
+router.get('/detail/:metric/export/pdf', DashboardController.detailPdf);
+
 module.exports = router;

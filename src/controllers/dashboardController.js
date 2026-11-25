@@ -7,9 +7,11 @@ const AuditLog = require('../models/AuditLog');
 // eslint-disable-next-line no-unused-vars
 const User = require('../models/User');
 const TenantUser = require('../models/TenantUser');
+const LoanMapping = require('../models/LoanMapping');
 const logger = require('../utils/logger');
 const { buildEssLoanSummary } = require('../utils/essLoanSummary');
 const { maker: cbsApi } = require('../services/cbs.api');
+const { renderTablePdf } = require('../utils/tablePdf');
 
 function mifosDate(value) {
   return Array.isArray(value) ? new Date(Date.UTC(value[0], value[1] - 1, value[2])) : null;
@@ -65,6 +67,154 @@ function earnedInterestInRange(transactions, from, to, today) {
   const upToTo = earnedInterestAsOf(transactions, rangeTo);
   const upToFrom = from ? earnedInterestAsOf(transactions, from) : 0;
   return upToTo - upToFrom;
+}
+
+async function fetchLoanDetailsWithTransactions() {
+  const response = await cbsApi.get('/v1/loans', { params: { limit: 1000 } });
+  const loans = response.data?.pageItems || [];
+  return Promise.all(loans.map(async (loan) => {
+    const result = await cbsApi.get(`/v1/loans/${loan.id}?associations=transactions`);
+    return result.data;
+  }));
+}
+
+async function getInterestIncomeRows(from, to) {
+  const details = await fetchLoanDetailsWithTransactions();
+  const today = new Date();
+  return details
+    .filter((loan) => mifosDate(loan.timeline?.actualDisbursementDate))
+    .map((loan) => ({
+      date: mifosDate(loan.timeline?.actualDisbursementDate)?.toISOString().slice(0, 10) || null,
+      loanAccountNo: loan.accountNo,
+      clientName: loan.clientName,
+      amount: earnedInterestInRange(loan.transactions, from, to, today)
+    }))
+    .filter((row) => row.amount > 0)
+    .sort((a, b) => b.amount - a.amount);
+}
+
+const DELINQUENCY_BUCKET_KEYS = ['current', 'days_1_30', 'days_31_60', 'days_61_90', 'days_90_plus'];
+const DELINQUENCY_BUCKET_LABELS = {
+  current: 'Current',
+  days_1_30: '1-30 Days',
+  days_31_60: '31-60 Days',
+  days_61_90: '61-90 Days',
+  days_90_plus: '90+ Days',
+};
+
+function classifyDelinquencyBucket(overdueSinceDateRaw, today) {
+  const overdueSince = mifosDate(overdueSinceDateRaw);
+  const overdueDays = overdueSince ? Math.max(0, Math.floor((today - overdueSince) / 86400000)) : 0;
+  const bucketKey = !overdueSince || overdueDays === 0 ? 'current'
+    : overdueDays <= 30 ? 'days_1_30'
+      : overdueDays <= 60 ? 'days_31_60'
+        : overdueDays <= 90 ? 'days_61_90' : 'days_90_plus';
+  return { bucketKey, overdueDays };
+}
+
+// Only implementation of lastRepaymentDate in the codebase lives in
+// loanRestructureBalanceHandler.js (last Repayment-type transaction, by array order) -
+// mirrored here rather than imported since that file's version is tied up in restructure
+// logic and returns a mifos-formatted string rather than the ISO yyyy-MM-dd this endpoint's
+// other date fields use.
+function lastRepaymentDateOf(transactions) {
+  const repayments = (transactions || []).filter((t) => t.type?.value === 'Repayment' && t.date);
+  if (!repayments.length) return null;
+  const last = repayments[repayments.length - 1];
+  return mifosDate(last.date)?.toISOString().slice(0, 10) || null;
+}
+
+// Per-loan delinquency detail rows for a single bucket - reuses overview()'s
+// overdueSinceDate-based bucket derivation (classifyDelinquencyBucket) but at row level
+// instead of aggregate-only, and enriches each loan with its Mongo-side client contact
+// (LoanMapping.metadata.clientData.mobileNumber/emailAddress, matched by mifosLoanId - the
+// same field this loan mapping is already keyed by, see loanMappingService.js's identical
+// clientData reuse pattern) since Fineract's own client record isn't fetched per row here.
+async function computeDelinquencyRows(bucketKey, tenantFilter) {
+  const details = await fetchLoanDetailsWithTransactions();
+  const activeStatuses = new Set(['Active', 'Overpaid']);
+  const today = new Date();
+
+  const loanIds = details.map((loan) => loan.id);
+  const mappings = await LoanMapping.find({ ...tenantFilter, mifosLoanId: { $in: loanIds } })
+    .select('mifosLoanId metadata.clientData')
+    .lean();
+  const contactByLoanId = new Map(mappings.map((m) => [m.mifosLoanId, m.metadata?.clientData || {}]));
+
+  return details
+    .filter((loan) => activeStatuses.has(loan.status?.value))
+    .map((loan) => ({ loan, ...classifyDelinquencyBucket(loan.summary?.overdueSinceDate, today) }))
+    .filter((r) => r.bucketKey === bucketKey)
+    .map(({ loan, overdueDays }) => {
+      const summary = loan.summary || {};
+      const contact = contactByLoanId.get(loan.id) || {};
+      return {
+        loanAccountNo: loan.accountNo,
+        clientName: loan.clientName,
+        clientExternalId: loan.clientExternalId || contact.nin || null,
+        mobileNo: contact.mobileNumber || null,
+        emailAddress: contact.emailAddress || null,
+        principalDisbursed: Number(summary.principalDisbursed || 0),
+        interestCharged: Number(summary.interestCharged || 0),
+        penaltyChargesCharged: Number(summary.penaltyChargesCharged || 0),
+        principalPaid: Number(summary.principalPaid || 0),
+        interestPaid: Number(summary.interestPaid || 0),
+        penaltyChargesPaid: Number(summary.penaltyChargesPaid || 0),
+        totalCollected: Number(summary.principalPaid || 0) + Number(summary.interestPaid || 0)
+          + Number(summary.penaltyChargesPaid || 0) + Number(summary.feeChargesPaid || 0),
+        principalOutstanding: Number(summary.principalOutstanding || 0),
+        interestOutstanding: Number(summary.interestOutstanding || 0),
+        penaltyChargesOutstanding: Number(summary.penaltyChargesOutstanding || 0),
+        totalOutstanding: Number(summary.totalOutstanding || 0),
+        pastDueDays: overdueDays,
+        disbursementDate: mifosDate(loan.timeline?.actualDisbursementDate)?.toISOString().slice(0, 10) || null,
+        lastRepaymentDate: lastRepaymentDateOf(loan.transactions),
+      };
+    })
+    .sort((a, b) => b.pastDueDays - a.pastDueDays);
+}
+
+const DELINQUENCY_PDF_COLUMNS = [
+  { field: 'loanAccountNo', header: 'Loan Account' },
+  { field: 'clientName', header: 'Client' },
+  { field: 'clientExternalId', header: 'NIN' },
+  { field: 'mobileNo', header: 'Mobile' },
+  { field: 'emailAddress', header: 'Email' },
+  { field: 'principalDisbursed', header: 'Principal Disbursed' },
+  { field: 'interestCharged', header: 'Interest Booked' },
+  { field: 'penaltyChargesCharged', header: 'Penalty Booked' },
+  { field: 'principalPaid', header: 'Principal Collected' },
+  { field: 'interestPaid', header: 'Interest Collected' },
+  { field: 'penaltyChargesPaid', header: 'Penalty Collected' },
+  { field: 'totalCollected', header: 'Total Collected' },
+  { field: 'principalOutstanding', header: 'Principal Outstanding' },
+  { field: 'interestOutstanding', header: 'Interest Outstanding' },
+  { field: 'penaltyChargesOutstanding', header: 'Penalty Outstanding' },
+  { field: 'totalOutstanding', header: 'Total Outstanding' },
+  { field: 'pastDueDays', header: 'Days Overdue' },
+  { field: 'disbursementDate', header: 'Disbursement Date' },
+  { field: 'lastRepaymentDate', header: 'Last Repayment Date' },
+];
+
+const INTEREST_INCOME_PDF_COLUMNS = [
+  { field: 'date', header: 'Date' },
+  { field: 'loanAccountNo', header: 'Loan Account' },
+  { field: 'clientName', header: 'Client' },
+  { field: 'amount', header: 'Amount' },
+];
+
+const PDF_CURRENCY_FIELDS = new Set([
+  'principalDisbursed', 'interestCharged', 'penaltyChargesCharged', 'principalPaid', 'interestPaid',
+  'penaltyChargesPaid', 'totalCollected', 'principalOutstanding', 'interestOutstanding',
+  'penaltyChargesOutstanding', 'totalOutstanding', 'amount',
+]);
+
+function formatPdfCell(field, value) {
+  if (value === null || value === undefined || value === '') return '';
+  if (PDF_CURRENCY_FIELDS.has(field)) {
+    return Number(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  return String(value);
 }
 
 async function getMifosSummary({ from, to }) {
@@ -356,10 +506,8 @@ class DashboardController {
     }
   }
 
-  // Drill-down rows behind a summary card. Currently only 'interest-income' is implemented -
-  // this route existed on the frontend (DashboardDetail.js has a full column config and calls
-  // this exact path) with nothing behind it on the backend at all, so every metric 404'd and
-  // the detail page always rendered empty.
+  // Drill-down rows behind a summary card. 'interest-income' and every 'delinquency-<bucket>'
+  // are implemented; any other metric still returns an empty row set.
   //
   // interest-income mirrors overview()'s miraCoreSummary.interestIncomeThisMonth exactly: both
   // use earnedInterestInRange() (max of daily-accrual and actually-paid interest, per loan
@@ -382,31 +530,75 @@ class DashboardController {
       const to = req.query.to ? new Date(`${req.query.to}T23:59:59.999Z`) : null;
 
       if (metric === 'interest-income') {
-        const response = await cbsApi.get('/v1/loans', { params: { limit: 1000 } });
-        const loans = response.data?.pageItems || [];
-        const today = new Date();
-        const details = await Promise.all(loans.map(async (loan) => {
-          const result = await cbsApi.get(`/v1/loans/${loan.id}?associations=transactions`);
-          return result.data;
-        }));
-
-        const rows = details
-          .filter((loan) => mifosDate(loan.timeline?.actualDisbursementDate))
-          .map((loan) => ({
-            date: mifosDate(loan.timeline?.actualDisbursementDate)?.toISOString().slice(0, 10) || null,
-            loanAccountNo: loan.accountNo,
-            clientName: loan.clientName,
-            amount: earnedInterestInRange(loan.transactions, from, to, today)
-          }))
-          .filter((row) => row.amount > 0)
-          .sort((a, b) => b.amount - a.amount);
-
+        const rows = await getInterestIncomeRows(from, to);
         return res.json({ success: true, data: { rows } });
+      }
+
+      // Delinquency buckets are per-loan-derived (no Fineract-side filter for this), so the
+      // full matching set is computed first and then sliced server-side - real pagination of
+      // an already-filtered result, not a raw unpaginated Fineract page. Current is typically
+      // the largest bucket, hence pagination here rather than the fetch-all-then-client-page
+      // pattern interest-income above still uses.
+      if (metric?.startsWith('delinquency-')) {
+        const bucketKey = metric.slice('delinquency-'.length);
+        if (!DELINQUENCY_BUCKET_KEYS.includes(bucketKey)) {
+          return res.json({ success: true, data: { rows: [] } });
+        }
+        const allRows = await computeDelinquencyRows(bucketKey, tenantFilter);
+        const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+        const limit = Math.min(Math.max(1, parseInt(req.query.limit, 10) || 25), 200);
+        const total = allRows.length;
+        const start = (page - 1) * limit;
+        const rows = allRows.slice(start, start + limit);
+        return res.json({ success: true, data: { rows, pagination: { page, limit, total, pages: Math.ceil(total / limit) } } });
       }
 
       return res.json({ success: true, data: { rows: [] } });
     } catch (error) {
       logger.error('Dashboard detail error:', error);
+      res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
+  // Same row sources as detail() above, but always the full unpaginated set (a PDF export is
+  // meant to be the complete record, not one page of the on-screen grid).
+  static async detailPdf(req, res) {
+    try {
+      const tenantFilter = resolveTenantFilter(req);
+      if (tenantFilter === null) {
+        return res.status(403).json({
+          success: false,
+          message: 'Tenant context required for dashboard detail.'
+        });
+      }
+
+      const { metric } = req.params;
+      const from = req.query.from ? new Date(`${req.query.from}T00:00:00.000Z`) : null;
+      const to = req.query.to ? new Date(`${req.query.to}T23:59:59.999Z`) : null;
+
+      let rows = [];
+      let columns = [];
+      let title = metric;
+
+      if (metric === 'interest-income') {
+        rows = await getInterestIncomeRows(from, to);
+        columns = INTEREST_INCOME_PDF_COLUMNS;
+        title = 'Interest Income This Month';
+      } else if (metric?.startsWith('delinquency-')) {
+        const bucketKey = metric.slice('delinquency-'.length);
+        if (DELINQUENCY_BUCKET_KEYS.includes(bucketKey)) {
+          rows = await computeDelinquencyRows(bucketKey, tenantFilter);
+          columns = DELINQUENCY_PDF_COLUMNS;
+          title = `Delinquency Bucket - ${DELINQUENCY_BUCKET_LABELS[bucketKey] || bucketKey}`;
+        }
+      }
+
+      const pdfBuffer = await renderTablePdf({ title, columns, rows, formatCell: formatPdfCell });
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${metric}.pdf"`);
+      res.send(pdfBuffer);
+    } catch (error) {
+      logger.error('Dashboard detail PDF export error:', error);
       res.status(500).json({ success: false, message: error.message });
     }
   }
