@@ -116,6 +116,10 @@ const messageLogSchema = new mongoose.Schema({
   },
   metadata: {
     type: mongoose.Schema.Types.Mixed
+  },
+  // "backfill" for entries rebuilt from loan records; unset for logged messages
+  source: {
+    type: String
   }
 }, {
   timestamps: true

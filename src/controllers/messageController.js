@@ -144,6 +144,14 @@ class MessageController {
         });
       }
 
+      // Backfilled entries have no message body, so there is nothing to send
+      if (!originalMessage.xmlPayload) {
+        return res.status(400).json({
+          success: false,
+          message: 'This entry has no stored message body and cannot be resent.'
+        });
+      }
+
       logger.info(`Resending message ${messageId} of type ${originalMessage.messageType}`);
 
       try {
