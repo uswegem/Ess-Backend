@@ -22,6 +22,10 @@ const MessageLog = require('../../src/models/MessageLog');
 const messageAudit = require('../../src/services/messageAudit');
 const { sendCallback } = require('../../src/utils/callbackUtils');
 const { runWithTenantContext } = require('../../src/utils/tenantContext');
+const LoanMapping = require('../../src/models/LoanMapping');
+const AuditLog = require('../../src/models/AuditLog');
+const loanStatusController = require('../../src/controllers/loanStatusController');
+const handleMifosWebhook = require('../../src/controllers/handlers/mifosWebhookHandler');
 
 const INCOMING = [
   'LOAN_CHARGES_REQUEST', 'LOAN_OFFER_REQUEST', 'TOP_UP_OFFER_REQUEST', 'LOAN_TAKEOVER_OFFER_REQUEST',
@@ -142,6 +146,72 @@ describe('outgoing messages', () => {
   test('delivery succeeds when logging fails', async () => {
     jest.spyOn(MessageLog, 'updateOne').mockImplementation(() => { throw new Error('db down'); });
     await expect(sendCallback(callback('LOAN_INITIAL_APPROVAL_NOTIFICATION'))).resolves.toMatchObject({ status: 200 });
+  });
+});
+
+describe('other outgoing senders', () => {
+  test('the manual loan status request is logged', async () => {
+    axios.post.mockResolvedValue({ status: 200, data: '<ResponseCode>8000</ResponseCode>' });
+    const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+    await loanStatusController.triggerLoanStatusRequest({ body: { ApplicationNumber: 'ESS1' }, tenant: { tenantId: 'legacy-zedone' } }, res);
+    await messageAudit.flush();
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(await MessageLog.findOne().lean()).toMatchObject({ messageType: 'LOAN_STATUS_REQUEST', direction: 'outgoing', status: 'completed', applicationNumber: 'ESS1' });
+  });
+
+  test('the restructure initial approval from the Mifos webhook is logged', async () => {
+    const env = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'development';
+    axios.post.mockResolvedValue({ status: 200, data: '<ResponseCode>8000</ResponseCode>' });
+    jest.spyOn(LoanMapping, 'findOne').mockResolvedValue({ _id: 'x', tenantId: 'legacy-zedone', essApplicationNumber: 'ESS1', pendingCallback: {} });
+    jest.spyOn(LoanMapping, 'updateOne').mockResolvedValue({});
+    jest.spyOn(AuditLog, 'create').mockResolvedValue({});
+    try {
+      const res = { status: jest.fn().mockReturnThis(), json: jest.fn(), send: jest.fn() };
+      await handleMifosWebhook({ body: { entityName: 'RESCHEDULELOAN', actionName: 'APPROVE', entity: { id: 1, loanId: 2 } }, headers: {}, get: () => undefined }, res);
+      for (let i = 0; i < 40 && !axios.post.mock.calls.length; i += 1) await new Promise((resolve) => setTimeout(resolve, 25));
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    } finally {
+      process.env.NODE_ENV = env;
+    }
+    await messageAudit.flush();
+    expect(await MessageLog.findOne().lean()).toMatchObject({ messageType: 'LOAN_INITIAL_APPROVAL_NOTIFICATION', direction: 'outgoing', status: 'completed', applicationNumber: 'ESS1' });
+  });
+});
+
+describe('failure after the acknowledgment', () => {
+  const mapping = (status) => ({ tenantId: 'legacy-zedone', essApplicationNumber: 'ESS1', productCode: '17', requestedAmount: 1000, tenure: 12, status });
+  const settle = async () => { await new Promise((resolve) => setTimeout(resolve, 50)); await messageAudit.flush(); };
+
+  beforeEach(async () => {
+    await post('LOAN_FINAL_APPROVAL_NOTIFICATION');
+    await post('LOAN_OFFER_REQUEST');
+    await messageAudit.flush();
+  });
+  const statusOf = async (type) => (await MessageLog.findOne({ messageType: type }).lean()).status;
+
+  test('saving a FAILED loan fails only the final approval log', async () => {
+    await new LoanMapping({ ...mapping('FAILED'), metadata: { loanCreationFailure: { message: 'no tenure' } } }).save();
+    await settle();
+    expect(await MessageLog.findOne({ messageType: 'LOAN_FINAL_APPROVAL_NOTIFICATION' }).lean()).toMatchObject({ status: 'failed', errorMessage: 'no tenure' });
+    expect(await statusOf('LOAN_OFFER_REQUEST')).toBe('completed');
+  });
+
+  test('updating a loan to FAILED does the same', async () => {
+    await new LoanMapping(mapping('FINAL_APPROVAL_RECEIVED')).save();
+    await LoanMapping.findOneAndUpdate({ essApplicationNumber: 'ESS1' }, { status: 'FAILED' }, { new: true });
+    await settle();
+    expect(await statusOf('LOAN_FINAL_APPROVAL_NOTIFICATION')).toBe('failed');
+  });
+
+  test('other loan statuses leave the log alone, and a log error does not fail the save', async () => {
+    await new LoanMapping(mapping('DISBURSED')).save();
+    await settle();
+    expect(await statusOf('LOAN_FINAL_APPROVAL_NOTIFICATION')).toBe('completed');
+
+    jest.spyOn(MessageLog, 'findOneAndUpdate').mockRejectedValue(new Error('db down'));
+    await expect(LoanMapping.findOneAndUpdate({ essApplicationNumber: 'ESS1' }, { status: 'FAILED' }, { new: true })).resolves.toMatchObject({ status: 'FAILED' });
+    await settle();
   });
 });
 

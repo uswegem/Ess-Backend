@@ -1,3 +1,4 @@
+const messageAudit = require('../../services/messageAudit');
 const logger = require('../../utils/logger');
 const digitalSignature = require('../../utils/signatureUtils');
 const axios = require('axios');
@@ -202,12 +203,23 @@ async function sendLoanInitialApprovalNotification(loanMapping) {
             url: callbackUrl
         });
 
-        const response = await axios.post(callbackUrl, signedXml, {
+        const response = await messageAudit.trackSend({
+            data: {
+                Header: notificationData.Data.Header,
+                // loan mappings name this essApplicationNumber
+                MessageDetails: {
+                    ...notificationData.Data.MessageDetails,
+                    ApplicationNumber: loanMapping.applicationNumber || loanMapping.essApplicationNumber
+                }
+            },
+            xmlPayload: signedXml,
+            tenantId: loanMapping.tenantId
+        }, () => axios.post(callbackUrl, signedXml, {
             headers: {
                 'Content-Type': 'application/xml'
             },
             timeout: 30000
-        });
+        }));
 
         logger.info('✅ LOAN_INITIAL_APPROVAL_NOTIFICATION sent successfully:', {
             status: response.status,

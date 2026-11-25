@@ -142,6 +142,49 @@ function finish(entry, { status, errorMessage, response, xmlPayload }) {
   }
 }
 
+/** Runs an ESS delivery that does not go through sendCallback, logging its outcome. */
+async function trackSend({ data, xmlPayload, tenantId }, send) {
+  const entry = start({ data, direction: 'outgoing', tenantId, xmlPayload });
+  try {
+    const response = await send();
+    finish(entry, { ...outcomeOf(response?.status, response?.data), response: response?.data });
+    return response;
+  } catch (error) {
+    finish(entry, { status: 'failed', errorMessage: error.message });
+    throw error;
+  }
+}
+
+/**
+ * A final approval is acknowledged before the loan is created, so its log can
+ * already read "completed" when the processing fails. Correct it afterwards.
+ */
+function processingFailed({ tenantId, applicationNumber, errorMessage }) {
+  if (!isEnabled() || !applicationNumber) return Promise.resolve();
+
+  const key = `processing|${tenantId}|${applicationNumber}`;
+  const next = Promise.all([...pendingWrites.values()])
+    .then(() => MessageLog.findOneAndUpdate(
+      {
+        tenantId: resolveTenantId(tenantId),
+        applicationNumber,
+        direction: 'incoming',
+        messageType: 'LOAN_FINAL_APPROVAL_NOTIFICATION',
+        status: { $in: ['received', 'completed'] }
+      },
+      { $set: { status: 'failed', errorMessage } },
+      { sort: { createdAt: -1 } }
+    ))
+    .catch((error) => {
+      logger.error('Message audit processing-failure update failed', { applicationNumber, error: error.message });
+    })
+    .finally(() => {
+      if (pendingWrites.get(key) === next) pendingWrites.delete(key);
+    });
+  pendingWrites.set(key, next);
+  return next;
+}
+
 /** Decides completed/failed from an HTTP status and an (optionally XML) response body. */
 function outcomeOf(httpStatus, body) {
   const content = typeof body === 'string' ? body : Buffer.isBuffer(body) ? body.toString('utf8') : '';
@@ -210,6 +253,8 @@ module.exports = {
   incomingMessageAudit,
   start,
   finish,
+  trackSend,
+  processingFailed,
   outcomeOf,
   describeMessage,
   resolveTenantId,

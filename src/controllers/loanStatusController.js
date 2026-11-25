@@ -4,6 +4,7 @@ const { getMessageId } = require('../utils/messageIdGenerator');
 const logger = require('../utils/logger');
 const { getUtumishiEndpoint, getApiTimeoutMs } = require('../config/runtimeEnv');
 const { getUtumishiHttpsAgent } = require('../utils/utumishiAgent');
+const messageAudit = require('../services/messageAudit');
 
 // Main controller function
 exports.triggerLoanStatusRequest = async (req, res) => {
@@ -39,14 +40,17 @@ exports.triggerLoanStatusRequest = async (req, res) => {
 
     // Send to ESS endpoint
     const essUrl = getUtumishiEndpoint({ required: true });
-    const essResponse = await axios.post(essUrl, signedXml, {
-      headers: {
-        'Content-Type': 'application/xml',
-        'Accept': 'application/xml'
-      },
-      httpsAgent: getUtumishiHttpsAgent(),
-      timeout: getApiTimeoutMs()
-    });
+    const essResponse = await messageAudit.trackSend(
+      { data: dataObject, xmlPayload: signedXml, tenantId: req.tenant?.tenantId },
+      () => axios.post(essUrl, signedXml, {
+        headers: {
+          'Content-Type': 'application/xml',
+          'Accept': 'application/xml'
+        },
+        httpsAgent: getUtumishiHttpsAgent(),
+        timeout: getApiTimeoutMs()
+      })
+    );
 
     logger.info('ESS Response received:', essResponse.status);
 

@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const messageAudit = require('../services/messageAudit');
 
 const loanMappingSchema = new mongoose.Schema({
   tenantId: {
@@ -266,6 +267,26 @@ loanMappingSchema.index({ status: 1, createdAt: -1 }); // Status with time filte
 loanMappingSchema.index({ originalMessageType: 1, status: 1 }); // Message type analytics
 loanMappingSchema.index({ rejectedBy: 1, status: 1 }, { sparse: true }); // Rejection analytics
 loanMappingSchema.index({ cancelledBy: 1, status: 1 }, { sparse: true }); // Cancellation analytics
+
+// A loan that turns FAILED also fails the message log of its final approval.
+// Not awaited: logging never delays or breaks the loan update.
+function auditFailedLoan(mapping) {
+  if (mapping?.status !== 'FAILED') return;
+  messageAudit.processingFailed({
+    tenantId: mapping.tenantId,
+    applicationNumber: mapping.essApplicationNumber,
+    errorMessage: mapping.metadata?.loanCreationFailure?.message
+      || mapping.metadata?.failureReason
+      || 'Loan processing failed after the message was acknowledged'
+  });
+}
+loanMappingSchema.post('save', (mapping) => auditFailedLoan(mapping));
+loanMappingSchema.post('findOneAndUpdate', function auditFailedUpdate(mapping) {
+  const update = this.getUpdate() || {};
+  if (mapping && (update.status || update.$set?.status) === 'FAILED') {
+    auditFailedLoan({ ...(mapping.toObject?.() || mapping), status: 'FAILED' });
+  }
+});
 
 const LoanMapping = mongoose.model('LoanMapping', loanMappingSchema);
 
