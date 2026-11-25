@@ -773,7 +773,37 @@
               {
                 "id": "color",
                 "value": {
+                  "fixedColor": "#3274D9",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "approved"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
                   "fixedColor": "#73BF69",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "rejected"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "#FF9830",
                   "mode": "fixed"
                 }
               }
@@ -855,6 +885,16 @@
             {
               "selector": "completed",
               "text": "completed",
+              "type": "number"
+            },
+            {
+              "selector": "approved",
+              "text": "approved",
+              "type": "number"
+            },
+            {
+              "selector": "rejected",
+              "text": "rejected",
               "type": "number"
             },
             {
@@ -1074,7 +1114,37 @@
               {
                 "id": "color",
                 "value": {
+                  "fixedColor": "#3274D9",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "approved"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
                   "fixedColor": "#73BF69",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "rejected"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "#FF9830",
                   "mode": "fixed"
                 }
               }
@@ -1156,6 +1226,16 @@
             {
               "selector": "completed",
               "text": "completed",
+              "type": "number"
+            },
+            {
+              "selector": "approved",
+              "text": "approved",
+              "type": "number"
+            },
+            {
+              "selector": "rejected",
+              "text": "rejected",
               "type": "number"
             },
             {

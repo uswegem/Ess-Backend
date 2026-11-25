@@ -166,7 +166,6 @@ describe('other outgoing senders', () => {
     axios.post.mockResolvedValue({ status: 200, data: '<ResponseCode>8000</ResponseCode>' });
     jest.spyOn(LoanMapping, 'findOne').mockResolvedValue({ _id: 'x', tenantId: 'legacy-zedone', essApplicationNumber: 'ESS1', pendingCallback: {} });
     jest.spyOn(LoanMapping, 'updateOne').mockResolvedValue({});
-    jest.spyOn(AuditLog, 'create').mockResolvedValue({});
     try {
       const res = { status: jest.fn().mockReturnThis(), json: jest.fn(), send: jest.fn() };
       await handleMifosWebhook({ body: { entityName: 'RESCHEDULELOAN', actionName: 'APPROVE', entity: { id: 1, loanId: 2 } }, headers: {}, get: () => undefined }, res);
@@ -177,6 +176,11 @@ describe('other outgoing senders', () => {
     }
     await messageAudit.flush();
     expect(await MessageLog.findOne().lean()).toMatchObject({ messageType: 'LOAN_INITIAL_APPROVAL_NOTIFICATION', direction: 'outgoing', status: 'completed', applicationNumber: 'ESS1' });
+    // both audit entries are valid, and the loan update after them is reached
+    const audits = await AuditLog.find({ resource: 'MIFOS_WEBHOOK' }).lean();
+    expect(audits.map((a) => a.description).sort()).toEqual(['LOAN_INITIAL_APPROVAL_SENT', 'LOAN_RESTRUCTURE_APPROVED']);
+    expect(audits[0]).toMatchObject({ tenantId: 'legacy-zedone', actorType: 'system', status: 'success' });
+    expect(LoanMapping.updateOne).toHaveBeenCalled();
   });
 });
 
@@ -248,8 +252,19 @@ describe('summary_rows', () => {
     const body = await call('/disbursement');
     expect(body.summary).toEqual({ count: 5, by_status: { sent: 1, completed: 1, pending: 1, received: 1, failed: 1 } });
     expect(body.summary_rows).toEqual([
-      { category: 'LOAN_DISBURSEMENT_NOTIFICATION', pending: 1, completed: 2, failed: 0 },
-      { category: 'TAKEOVER_DISBURSEMENT_NOTIFICATION', pending: 1, completed: 0, failed: 1 }
+      { category: 'LOAN_DISBURSEMENT_NOTIFICATION', pending: 1, completed: 2, approved: 0, rejected: 0, failed: 0 },
+      { category: 'TAKEOVER_DISBURSEMENT_NOTIFICATION', pending: 1, completed: 0, approved: 0, rejected: 0, failed: 1 }
+    ]);
+  });
+
+  test('splits completed approvals into approved and rejected', async () => {
+    const type = 'LOAN_FINAL_APPROVAL_NOTIFICATION';
+    await MessageLog.create([
+      log(type, 'completed', { metadata: { approval: 'APPROVED' } }), log(type, 'completed', { metadata: { approval: 'REJECTED' } }),
+      log(type, 'completed'), log(type, 'failed', { metadata: { approval: 'APPROVED' } })
+    ]);
+    expect((await call('/hr-approval')).summary_rows).toEqual([
+      { category: type, pending: 0, completed: 3, approved: 1, rejected: 1, failed: 1 }
     ]);
   });
 
@@ -267,8 +282,8 @@ describe('summary_rows', () => {
     expect(body.summary.count).toBe(3);
     expect(body.rows).toHaveLength(3);
     expect(body.summary_rows).toEqual([
-      { category: 'Product A', pending: 0, completed: 1, failed: 1 },
-      { category: 'Product B', pending: 1, completed: 0, failed: 0 }
+      { category: 'Product A', pending: 0, completed: 1, approved: 0, rejected: 0, failed: 1 },
+      { category: 'Product B', pending: 1, completed: 0, approved: 0, rejected: 0, failed: 0 }
     ]);
   });
 });

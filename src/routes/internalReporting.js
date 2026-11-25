@@ -28,18 +28,24 @@ const STATUS_BUCKETS = {
   failed: 'failed'
 };
 
-// Counted in the database, so unlike `rows` it is not capped at 1000 records
+// Counted in the database, so unlike `rows` it is not capped at 1000 records.
+// approved and rejected break down `completed` by the message's Approval value.
 async function summaryRows(Model, filter, category) {
   const groups = await Model.aggregate([
     { $match: filter },
-    { $group: { _id: { category, status: '$status' }, count: { $sum: 1 } } }
+    { $group: { _id: { category, status: '$status', approval: '$metadata.approval' }, count: { $sum: 1 } } }
   ]);
   const byCategory = new Map();
   groups.forEach(({ _id, count }) => {
     const name = _id.category || 'Unknown';
-    if (!byCategory.has(name)) byCategory.set(name, { category: name, pending: 0, completed: 0, failed: 0 });
+    if (!byCategory.has(name)) byCategory.set(name, { category: name, pending: 0, completed: 0, approved: 0, rejected: 0, failed: 0 });
     const bucket = STATUS_BUCKETS[String(_id.status).toLowerCase()];
-    if (bucket) byCategory.get(name)[bucket] += count;
+    if (!bucket) return;
+    byCategory.get(name)[bucket] += count;
+    const approval = String(_id.approval || '').toLowerCase();
+    if (bucket === 'completed' && (approval === 'approved' || approval === 'rejected')) {
+      byCategory.get(name)[approval] += count;
+    }
   });
   return [...byCategory.values()].sort((a, b) => a.category.localeCompare(b.category));
 }
