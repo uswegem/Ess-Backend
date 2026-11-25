@@ -19,6 +19,7 @@ const apiController = require('../../src/controllers/apiController');
 const apiRouter = require('../../src/routes/api');
 const reportingRouter = require('../../src/routes/internalReporting');
 const MessageLog = require('../../src/models/MessageLog');
+const PossibleLoanCharges = require('../../src/models/PossibleLoanCharges');
 const messageAudit = require('../../src/services/messageAudit');
 const { sendCallback } = require('../../src/utils/callbackUtils');
 const { runWithTenantContext } = require('../../src/utils/tenantContext');
@@ -228,5 +229,46 @@ describe('reporting endpoints', () => {
     });
     expect(body.rows).toHaveLength(1);
     expect(body.rows[0]).toMatchObject({ message_type: type, request_type: type, check_number: '113', application_number: 'ESS1', requested_amount: 5000, status: 'completed' });
+  });
+});
+
+describe('summary_rows', () => {
+  const call = (path, query = {}) => new Promise((resolve, reject) => {
+    const layer = reportingRouter.stack.find((l) => l.route?.path === path);
+    layer.route.stack[0].handle({ tenant: { tenantId: 'legacy-zedone' }, query }, { json: resolve }, reject);
+  });
+  const log = (messageType, status, extra = {}) => ({ tenantId: 'legacy-zedone', messageId: `${messageType}-${status}-${Math.random()}`, messageType, status, xmlPayload: '<x/>', ...extra });
+
+  test('groups by message type, maps statuses and keeps the old summary', async () => {
+    await MessageLog.create([
+      log('LOAN_DISBURSEMENT_NOTIFICATION', 'sent'), log('LOAN_DISBURSEMENT_NOTIFICATION', 'completed'),
+      log('LOAN_DISBURSEMENT_NOTIFICATION', 'pending'), log('TAKEOVER_DISBURSEMENT_NOTIFICATION', 'received'),
+      log('TAKEOVER_DISBURSEMENT_NOTIFICATION', 'failed'), log('LOAN_DISBURSEMENT_NOTIFICATION', 'sent', { tenantId: 'other' })
+    ]);
+    const body = await call('/disbursement');
+    expect(body.summary).toEqual({ count: 5, by_status: { sent: 1, completed: 1, pending: 1, received: 1, failed: 1 } });
+    expect(body.summary_rows).toEqual([
+      { category: 'LOAN_DISBURSEMENT_NOTIFICATION', pending: 1, completed: 2, failed: 0 },
+      { category: 'TAKEOVER_DISBURSEMENT_NOTIFICATION', pending: 1, completed: 0, failed: 1 }
+    ]);
+  });
+
+  test.each(['/loan-request', '/loan-offer', '/hr-approval', '/disbursement', '/liquidation'])('%s returns an empty list without data', async (path) => {
+    expect((await call(path, { from: '2026-01-01T00:00:00Z' })).summary_rows).toEqual([]);
+  });
+
+  test('possible loan charges group by product and respect the date range', async () => {
+    const base = { tenantId: 'legacy-zedone', productName: 'Product A', createdAt: new Date('2026-11-20') };
+    await PossibleLoanCharges.collection.insertMany([
+      { ...base, status: 'COMPLETED' }, { ...base, status: 'FAILED' }, { ...base, status: 'PENDING', productName: 'Product B' },
+      { ...base, status: 'COMPLETED', createdAt: new Date('2026-01-01') }
+    ]);
+    const body = await call('/possible-loan-charges', { from: '2026-11-01T00:00:00Z' });
+    expect(body.summary.count).toBe(3);
+    expect(body.rows).toHaveLength(3);
+    expect(body.summary_rows).toEqual([
+      { category: 'Product A', pending: 0, completed: 1, failed: 1 },
+      { category: 'Product B', pending: 1, completed: 0, failed: 0 }
+    ]);
   });
 });

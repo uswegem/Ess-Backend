@@ -17,8 +17,31 @@ function dateFilter(req) {
   return filter;
 }
 
-function sendRows(res, rows, summary) {
-  return res.json({ success: true, summary, rows });
+function sendRows(res, rows, summary, summaryRowsData) {
+  return res.json({ success: true, summary, summary_rows: summaryRowsData, rows });
+}
+
+// Chart bucket for each stored status (charges use upper case)
+const STATUS_BUCKETS = {
+  pending: 'pending', received: 'pending',
+  completed: 'completed', sent: 'completed', resent: 'completed',
+  failed: 'failed'
+};
+
+// Counted in the database, so unlike `rows` it is not capped at 1000 records
+async function summaryRows(Model, filter, category) {
+  const groups = await Model.aggregate([
+    { $match: filter },
+    { $group: { _id: { category, status: '$status' }, count: { $sum: 1 } } }
+  ]);
+  const byCategory = new Map();
+  groups.forEach(({ _id, count }) => {
+    const name = _id.category || 'Unknown';
+    if (!byCategory.has(name)) byCategory.set(name, { category: name, pending: 0, completed: 0, failed: 0 });
+    const bucket = STATUS_BUCKETS[String(_id.status).toLowerCase()];
+    if (bucket) byCategory.get(name)[bucket] += count;
+  });
+  return [...byCategory.values()].sort((a, b) => a.category.localeCompare(b.category));
 }
 
 function messageRows(messages) {
@@ -77,14 +100,18 @@ function messageRows(messages) {
 async function getMessages(req, res, messageTypes) {
   const filter = dateFilter(req);
   if (messageTypes) filter.messageType = { $in: messageTypes };
-  const messages = await MessageLog.find(filter).sort({ createdAt: -1 }).limit(1000).lean();
+  const [messages, chartRows] = await Promise.all([
+    MessageLog.find(filter).sort({ createdAt: -1 }).limit(1000).lean(),
+    summaryRows(MessageLog, filter, '$messageType')
+  ]);
   const rows = messageRows(messages);
-  return sendRows(res, rows, { count: rows.length, by_status: rows.reduce((result, row) => { result[row.status] = (result[row.status] || 0) + 1; return result; }, {}) });
+  return sendRows(res, rows, { count: rows.length, by_status: rows.reduce((result, row) => { result[row.status] = (result[row.status] || 0) + 1; return result; }, {}) }, chartRows);
 }
 
 router.get('/possible-loan-charges', async (req, res, next) => {
   try {
     const records = await PossibleLoanCharges.find(dateFilter(req)).sort({ createdAt: -1 }).limit(1000).lean();
+    const chartRows = await summaryRows(PossibleLoanCharges, dateFilter(req), { $ifNull: ['$productName', '$productCode'] });
     const rows = records.map((record) => ({
       trace_id: record._id.toString(), time: record.createdAt, message_type: 'LOAN_CHARGES_REQUEST',
       id_number: record.idNumber, id_number_type: record.idNumberType, application_number: record.applicationNumber || '',
@@ -98,7 +125,7 @@ router.get('/possible-loan-charges', async (req, res, next) => {
       status: record.status, error_message: record.errorMessage || '', created_at: record.createdAt,
       updated_at: record.updatedAt, tenant_id: record.tenantId
     }));
-    return sendRows(res, rows, { count: rows.length, by_status: rows.reduce((result, row) => { result[row.status] = (result[row.status] || 0) + 1; return result; }, {}) });
+    return sendRows(res, rows, { count: rows.length, by_status: rows.reduce((result, row) => { result[row.status] = (result[row.status] || 0) + 1; return result; }, {}) }, chartRows);
   } catch (error) { return next(error); }
 });
 

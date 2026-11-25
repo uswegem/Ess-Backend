@@ -154,7 +154,7 @@
               }
             ]
           },
-          "root_selector": "summary",
+          "root_selector": "summary_rows",
           "columns": [
             {
               "selector": "category",
@@ -439,13 +439,13 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "duplicate"
+              "options": "pending"
             },
             "properties": [
               {
                 "id": "color",
                 "value": {
-                  "fixedColor": "#8AB8FF",
+                  "fixedColor": "#EAB839",
                   "mode": "fixed"
                 }
               }
@@ -454,7 +454,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "received"
+              "options": "completed"
             },
             "properties": [
               {
@@ -480,41 +480,11 @@
                 }
               }
             ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "exception"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "#FF9830",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "other_bank"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "#B877D9",
-                  "mode": "fixed"
-                }
-              }
-            ]
           }
         ]
       },
       "options": {
-        "xField": "message_type",
+        "xField": "category",
         "orientation": "vertical",
         "showValue": "auto",
         "stacking": "none",
@@ -557,21 +527,21 @@
               }
             ]
           },
-          "root_selector": "summary",
+          "root_selector": "summary_rows",
           "columns": [
             {
-              "selector": "message_type",
-              "text": "message_type",
+              "selector": "category",
+              "text": "category",
               "type": "string"
             },
             {
-              "selector": "duplicate",
-              "text": "duplicate",
+              "selector": "pending",
+              "text": "pending",
               "type": "number"
             },
             {
-              "selector": "received",
-              "text": "received",
+              "selector": "completed",
+              "text": "completed",
               "type": "number"
             },
             {
@@ -782,7 +752,22 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "approved"
+              "options": "pending"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "#EAB839",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "completed"
             },
             "properties": [
               {
@@ -797,43 +782,13 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "rejected"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "#F2495C",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
               "options": "failed"
             },
             "properties": [
               {
                 "id": "color",
                 "value": {
-                  "fixedColor": "#FF6EB4",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "pending"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "#EAB839",
+                  "fixedColor": "#F2495C",
                   "mode": "fixed"
                 }
               }
@@ -885,7 +840,7 @@
               }
             ]
           },
-          "root_selector": "summary",
+          "root_selector": "summary_rows",
           "columns": [
             {
               "selector": "category",
@@ -893,23 +848,18 @@
               "type": "string"
             },
             {
-              "selector": "approved",
-              "text": "approved",
+              "selector": "pending",
+              "text": "pending",
               "type": "number"
             },
             {
-              "selector": "rejected",
-              "text": "rejected",
+              "selector": "completed",
+              "text": "completed",
               "type": "number"
             },
             {
               "selector": "failed",
               "text": "failed",
-              "type": "number"
-            },
-            {
-              "selector": "pending",
-              "text": "pending",
               "type": "number"
             }
           ]
@@ -1103,7 +1053,22 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "approved"
+              "options": "pending"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "#EAB839",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "completed"
             },
             "properties": [
               {
@@ -1118,28 +1083,13 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "rejected"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "#F2495C",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
               "options": "failed"
             },
             "properties": [
               {
                 "id": "color",
                 "value": {
-                  "fixedColor": "#FF6EB4",
+                  "fixedColor": "#F2495C",
                   "mode": "fixed"
                 }
               }
@@ -1191,7 +1141,7 @@
               }
             ]
           },
-          "root_selector": "summary",
+          "root_selector": "summary_rows",
           "columns": [
             {
               "selector": "category",
@@ -1199,13 +1149,13 @@
               "type": "string"
             },
             {
-              "selector": "approved",
-              "text": "approved",
+              "selector": "pending",
+              "text": "pending",
               "type": "number"
             },
             {
-              "selector": "rejected",
-              "text": "rejected",
+              "selector": "completed",
+              "text": "completed",
               "type": "number"
             },
             {
@@ -1410,7 +1360,22 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "disbursed"
+              "options": "pending"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "#EAB839",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "completed"
             },
             "properties": [
               {
@@ -1436,26 +1401,11 @@
                 }
               }
             ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "pending"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "#EAB839",
-                  "mode": "fixed"
-                }
-              }
-            ]
           }
         ]
       },
       "options": {
-        "xField": "message_type",
+        "xField": "category",
         "orientation": "vertical",
         "showValue": "auto",
         "stacking": "none",
@@ -1498,26 +1448,26 @@
               }
             ]
           },
-          "root_selector": "summary",
+          "root_selector": "summary_rows",
           "columns": [
             {
-              "selector": "message_type",
-              "text": "message_type",
+              "selector": "category",
+              "text": "category",
               "type": "string"
             },
             {
-              "selector": "disbursed",
-              "text": "disbursed",
+              "selector": "pending",
+              "text": "pending",
+              "type": "number"
+            },
+            {
+              "selector": "completed",
+              "text": "completed",
               "type": "number"
             },
             {
               "selector": "failed",
               "text": "failed",
-              "type": "number"
-            },
-            {
-              "selector": "pending",
-              "text": "pending",
               "type": "number"
             }
           ]
@@ -1747,13 +1697,13 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "received"
+              "options": "pending"
             },
             "properties": [
               {
                 "id": "color",
                 "value": {
-                  "fixedColor": "#73BF69",
+                  "fixedColor": "#EAB839",
                   "mode": "fixed"
                 }
               }
@@ -1762,13 +1712,13 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "sent"
+              "options": "completed"
             },
             "properties": [
               {
                 "id": "color",
                 "value": {
-                  "fixedColor": "#3274D9",
+                  "fixedColor": "#73BF69",
                   "mode": "fixed"
                 }
               }
@@ -1835,7 +1785,7 @@
               }
             ]
           },
-          "root_selector": "summary",
+          "root_selector": "summary_rows",
           "columns": [
             {
               "selector": "category",
@@ -1843,13 +1793,13 @@
               "type": "string"
             },
             {
-              "selector": "received",
-              "text": "received",
+              "selector": "pending",
+              "text": "pending",
               "type": "number"
             },
             {
-              "selector": "sent",
-              "text": "sent",
+              "selector": "completed",
+              "text": "completed",
               "type": "number"
             },
             {
