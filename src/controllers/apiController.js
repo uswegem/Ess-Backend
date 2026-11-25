@@ -426,7 +426,16 @@ const handleLoanFinalApproval = async (parsedData, res) => {
                     essCheckNumber: messageDetails.FSPReferenceNumber || messageDetails.CheckNumber,
                     productCode: '17',
                     requestedAmount: messageDetails.LoanAmount || messageDetails.RequestedAmount || 5000000,
-                    tenure: messageDetails.LoanTenure || messageDetails.Tenure || 60,
+                    // No hardcoded fallback: LOAN_FINAL_APPROVAL_NOTIFICATION never carries a
+                    // tenure field (confirmed against xmlValidator.js's schema for this message
+                    // type), so messageDetails.LoanTenure/.Tenure are dead checks kept only for
+                    // forward compatibility - the real value comes from existingMapping, set at
+                    // the original LOAN_OFFER_REQUEST. Left undefined when unresolved rather than
+                    // guessed: LoanMappingService.updateLoanMapping skips undefined keys on an
+                    // existing mapping (leaving its real tenure untouched) instead of overwriting
+                    // it with a wrong default - this was the exact mechanism that corrupted
+                    // LoanMapping.tenure to 60 on correctly-booked 36-month loans.
+                    tenure: existingMapping?.tenure || existingMapping?.metadata?.loanData?.tenure || messageDetails.LoanTenure || messageDetails.Tenure,
                     finalApprovalReceivedAt: new Date().toISOString()
                 };
                 
@@ -688,10 +697,22 @@ const handleLoanFinalApproval = async (parsedData, res) => {
                                                      5000000;
                                     const loanTenure = existingMapping?.tenure ||
                                                      existingMapping?.metadata?.loanData?.tenure ||
-                                                     messageDetails.LoanTenure || 
-                                                     messageDetails.Tenure || 
-                                                     60;
-                                    
+                                                     messageDetails.LoanTenure ||
+                                                     messageDetails.Tenure;
+
+                                    // No silent fallback for loan term, same "fail closed" principle
+                                    // already used just below for bookingProductRates: booking a real
+                                    // loan at a guessed tenure is a financial-accuracy risk, not
+                                    // something to default past. The ESS ack for this message was
+                                    // already sent (see the synchronous response above, before this
+                                    // setImmediate block), so this can't reject the message itself -
+                                    // instead it throws, which the surrounding catch below marks the
+                                    // LoanMapping FAILED with the reason, for manual review, rather
+                                    // than booking (or silently continuing) with tenure=60.
+                                    if (!loanTenure) {
+                                        throw new Error(`Cannot resolve loan tenure for application ${messageDetails.ApplicationNumber} (loan ${messageDetails.LoanNumber}) - existingMapping has no tenure and this notification carries none. Refusing to book in Fineract with a guessed value.`);
+                                    }
+
                                     logger.info(`Using loan amount: ${loanAmount}, tenure: ${loanTenure}`);
                                     
                                     // Check if this is a top-up or takeover loan
@@ -814,7 +835,18 @@ const handleLoanFinalApproval = async (parsedData, res) => {
                                 }
                             } catch (error) {
                                 logger.error('Error in loan creation process:', error);
-                                // Continue with loan mapping update even if process fails
+                                // Record the failure on the mapping instead of silently continuing -
+                                // the record was previously left at 'FINAL_APPROVAL_RECEIVED' with no
+                                // mifosLoanId, which is indistinguishable from "still processing".
+                                // Marking FAILED here (with a reason) surfaces this for manual review
+                                // without touching the ESS acknowledgment, which was already sent
+                                // synchronously before this async block ran.
+                                loanMappingData.status = 'FAILED';
+                                loanMappingData.metadata = {
+                                    ...loanMappingData.metadata,
+                                    loanCreationFailure: { message: error.message, failedAt: new Date().toISOString() }
+                                };
+                                // Continue with loan mapping update so the failure is recorded, not silently dropped
                             }
                             } // End of restructure check
                         }
@@ -823,6 +855,11 @@ const handleLoanFinalApproval = async (parsedData, res) => {
                 if (existingMapping) {
                     // Keep the requested amount from existing data
                     loanMappingData.requestedAmount = existingMapping.requestedAmount || loanMappingData.requestedAmount;
+                    // Same restore for tenure - without this, the hardcoded-60 fallback that used
+                    // to sit in loanMappingData's initial construction silently overwrote a correct
+                    // 36-month LoanMapping.tenure with 60 on every final-approval pass, even when
+                    // Fineract itself booked the loan correctly (confirmed on ESS1790541059537).
+                    loanMappingData.tenure = existingMapping.tenure || loanMappingData.tenure;
 
                     // Also keep any metadata
                     loanMappingData.metadata = {
