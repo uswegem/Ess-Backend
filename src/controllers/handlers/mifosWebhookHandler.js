@@ -3,10 +3,28 @@ const logger = require('../../utils/logger');
 const digitalSignature = require('../../utils/signatureUtils');
 const axios = require('axios');
 const LoanMapping = require('../../models/LoanMapping');
-const { AuditLog } = require('../../models/AuditLog');
+const AuditLog = require('../../models/AuditLog');
 const { getMessageId } = require('../../utils/messageIdGenerator');
 const pdfGeneratorService = require('../../services/pdfGeneratorService');
 const { getUtumishiEndpoint } = require('../../config/runtimeEnv');
+
+// Audit entry in the shape AuditLog requires. Never throws: a failed audit
+// write must not stop the loan processing around it.
+async function recordWebhookAudit({ eventType, status, tenantId, ...metadata }) {
+    try {
+        await AuditLog.create({
+            action: 'api_call',
+            actorType: 'system',
+            description: eventType,
+            resource: 'MIFOS_WEBHOOK',
+            status: status === 'failed' ? 'failed' : 'success',
+            tenantId,
+            metadata: { eventType, ...metadata }
+        });
+    } catch (error) {
+        logger.warn('Failed to write webhook audit log', { eventType, error: error.message });
+    }
+}
 
 const handleMifosWebhook = async (req, res) => {
     try {
@@ -135,8 +153,9 @@ async function handleRescheduleApproval(webhookData) {
         );
 
         // Create audit log
-        await AuditLog.create({
+        await recordWebhookAudit({
             eventType: 'LOAN_RESTRUCTURE_APPROVED',
+            tenantId: loanMapping.tenantId,
             messageType: 'MIFOS_WEBHOOK',
             direction: 'incoming',
             requestData: webhookData,
@@ -227,8 +246,9 @@ async function sendLoanInitialApprovalNotification(loanMapping) {
         });
 
         // Create audit log for sent notification
-        await AuditLog.create({
+        await recordWebhookAudit({
             eventType: 'LOAN_INITIAL_APPROVAL_SENT',
+            tenantId: loanMapping.tenantId,
             messageType: 'LOAN_INITIAL_APPROVAL_NOTIFICATION',
             direction: 'outgoing',
             requestData: notificationData.Data,
@@ -242,8 +262,9 @@ async function sendLoanInitialApprovalNotification(loanMapping) {
         logger.error('❌ Error sending LOAN_INITIAL_APPROVAL_NOTIFICATION:', error);
         
         // Log failure
-        await AuditLog.create({
+        await recordWebhookAudit({
             eventType: 'LOAN_INITIAL_APPROVAL_SEND_FAILED',
+            tenantId: loanMapping.tenantId,
             messageType: 'LOAN_INITIAL_APPROVAL_NOTIFICATION',
             direction: 'outgoing',
             status: 'failed',
@@ -294,7 +315,7 @@ async function handleLoanApproval(webhookData) {
         });
 
         // Create audit log
-        await AuditLog.create({
+        await recordWebhookAudit({
             eventType: 'LOAN_DOCUMENTS_GENERATED',
             messageType: 'MIFOS_WEBHOOK',
             direction: 'internal',
@@ -315,7 +336,7 @@ async function handleLoanApproval(webhookData) {
         logger.error('❌ Error handling loan approval:', error);
         
         // Log failure but don't throw - PDF generation failure shouldn't block other processing
-        await AuditLog.create({
+        await recordWebhookAudit({
             eventType: 'LOAN_DOCUMENTS_GENERATION_FAILED',
             messageType: 'MIFOS_WEBHOOK',
             direction: 'internal',
