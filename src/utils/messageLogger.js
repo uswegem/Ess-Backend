@@ -2,6 +2,7 @@ const logger = require('./logger');
 const MessageLog = require('../models/MessageLog');
 const { getMessageId } = require('./messageIdGenerator');
 const { buildTenantQuery } = require('./tenantQuery');
+const { resolveTenantId } = require('../services/messageAudit');
 
 /**
  * Logs an outgoing message to the MessageLog collection
@@ -43,10 +44,9 @@ async function logOutgoingMessage(xmlPayload, messageType, metadata = {}, userId
       metadata: otherMetadata
     };
 
-    if (tenantId) {
-      baseDoc.tenantId = tenantId;
-      if (tenantObjectId) baseDoc.tenant = tenantObjectId;
-    }
+    // Reporting filters by tenant, so an entry without one would never be shown
+    baseDoc.tenantId = resolveTenantId(tenantId);
+    if (tenantObjectId) baseDoc.tenant = tenantObjectId;
 
     const messageLog = new MessageLog(baseDoc);
 

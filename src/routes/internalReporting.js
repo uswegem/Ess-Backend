@@ -48,7 +48,29 @@ function messageRows(messages) {
     error_message: message.errorMessage || '',
     created_at: message.createdAt,
     updated_at: message.updatedAt,
-    tenant_id: message.tenantId
+    tenant_id: message.tenantId,
+    // Column names used by the dashboard tables
+    request_type: message.messageType,
+    utumishi_id: message.metadata?.idNumber || '',
+    check_number: message.checkNumber || message.metadata?.checkNumber || '',
+    first_name: message.metadata?.firstName || '',
+    middle_name: message.metadata?.middleName || '',
+    last_name: message.metadata?.lastName || '',
+    sex: message.metadata?.sex || '',
+    tenure: message.metadata?.requestedTenure || 0,
+    amount: message.metadata?.requestedAmount || 0, // never TotalAmountToPay: that is the repayable total
+    loan_number: message.loanNumber || '',
+    fsp_reference_num: message.fspReferenceNumber || '',
+    reason: message.metadata?.reason || '',
+    rejection_reason: message.metadata?.approval === 'REJECTED' ? message.metadata?.reason || '' : '',
+    direction: message.direction,
+    message_id: message.messageId,
+    sender: message.sender || '',
+    receiver: message.receiver || '',
+    sent_by: message.sentBy ? String(message.sentBy) : '',
+    retry_count: message.retryCount || 0,
+    resent_at: message.resentAt || null,
+    completed_at: ['completed', 'sent'].includes(message.status) ? message.updatedAt : null
   }));
 }
 

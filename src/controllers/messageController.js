@@ -155,7 +155,8 @@ class MessageController {
           applicationNumber: originalMessage.applicationNumber,
           loanNumber: originalMessage.loanNumber,
           fspReferenceNumber: originalMessage.fspReferenceNumber,
-          resentFrom: originalMessage.messageId
+          resentFrom: originalMessage.messageId,
+          skipLog: true // the resend entry is created below
         }, userId);
 
         // Update the original message record
@@ -169,6 +170,7 @@ class MessageController {
 
         // Create a new message log entry for the resend
         const resentMessage = new MessageLog({
+          tenantId: originalMessage.tenantId,
           messageId: `${originalMessage.messageId}_resent_${Date.now()}`,
           messageType: originalMessage.messageType,
           direction: 'outgoing',

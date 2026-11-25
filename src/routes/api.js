@@ -7,6 +7,7 @@ const digitalSignature = require('../utils/signatureUtils');
 const xml2js = require('xml2js');
 const loanStatusController = require('../controllers/loanStatusController');
 const logger = require('../utils/logger');
+const { incomingMessageAudit } = require('../services/messageAudit');
 
 /**
  * @swagger
@@ -51,7 +52,7 @@ const logger = require('../utils/logger');
  *               type: string
  */
 // Main API endpoint for loan-related requests
-router.post('/loan', apiController.processRequest);
+router.post('/loan', incomingMessageAudit, apiController.processRequest);
 
 /**
  * @swagger

@@ -787,7 +787,7 @@ class LoanMappingService {
       { messageType: 'LOAN_STATUS_REQUEST', reason: 'Always available — request the current status from Fineract.' }
     ];
 
-    const allMessageTypes = MessageLog.schema.path('messageType').enumValues;
+    const allMessageTypes = MessageLog.MESSAGE_TYPES;
 
     return {
       loanStatus: loan.status,

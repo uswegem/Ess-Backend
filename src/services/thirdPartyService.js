@@ -12,8 +12,11 @@ async function forwardToThirdParty(signedXml, messageType, metadata = {}, userId
   try {
     logger.info(' Preparing to send to ESS...');
     
-    // Log the outgoing message
-    messageLog = await logOutgoingMessage(signedXml, messageType, metadata, userId);
+    // Log the outgoing message (skipped when the caller writes its own entry)
+    const { skipLog, ...logMetadata } = metadata;
+    if (!skipLog) {
+      messageLog = await logOutgoingMessage(signedXml, messageType, logMetadata, userId);
+    }
     
     const essUrl = getUtumishiEndpoint({ required: true });
 

@@ -6,12 +6,35 @@ const router = express.Router();
 const digitalSignature = require('../utils/signatureUtils');
 const axios = require('axios');
 const { getUtumishiHttpsAgent } = require('./utumishiAgent');
+const messageAudit = require('../services/messageAudit');
 
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 5000; // 5 seconds
 
-// Helper function to send callback with retry logic
+// Single outgoing path to ESS: logs the message, then delivers it with retries
 async function sendCallback(callbackData) {
+    const entry = messageAudit.start({
+        data: callbackData?.Data || callbackData,
+        direction: 'outgoing'
+    });
+    let signedXml;
+
+    try {
+        const response = await deliverCallback(callbackData, (xml) => { signedXml = xml; });
+        messageAudit.finish(entry, {
+            ...messageAudit.outcomeOf(response?.status, response?.data),
+            response: response?.data,
+            xmlPayload: signedXml
+        });
+        return response;
+    } catch (error) {
+        messageAudit.finish(entry, { status: 'failed', errorMessage: error.message, xmlPayload: signedXml });
+        throw error;
+    }
+}
+
+// Helper function to send callback with retry logic
+async function deliverCallback(callbackData, onSigned) {
     // Skip callback in test mode
     if (process.env.NODE_ENV === 'test') {
         logger.info('📤 Skipping callback in test mode');
@@ -22,6 +45,7 @@ async function sendCallback(callbackData) {
     while (retryCount < MAX_RETRIES) {
         try {
             const signedCallback = digitalSignature.createSignedXML(callbackData.Data);
+            onSigned(signedCallback);
             logger.info(`📤 Attempt ${retryCount + 1}/${MAX_RETRIES} to send callback`);
         
         // Get callback URL from environment variables
