@@ -7,6 +7,8 @@ const { authMiddleware, permissionMiddleware } = require('../middleware/authMidd
 
 router.use(authMiddleware, permissionMiddleware('reporting:read'));
 
+const LOAN_REQUEST_TYPES = ['LOAN_OFFER_REQUEST', 'TOP_UP_OFFER_REQUEST', 'LOAN_TAKEOVER_OFFER_REQUEST', 'LOAN_RESTRUCTURE_REQUEST'];
+
 function dateFilter(req) {
   const filter = { tenantId: req.tenant.tenantId };
   if (req.query.from || req.query.to) {
@@ -135,11 +137,30 @@ router.get('/possible-loan-charges', async (req, res, next) => {
   } catch (error) { return next(error); }
 });
 
-router.get('/loan-request', (req, res, next) => getMessages(req, res, ['LOAN_OFFER_REQUEST', 'TOP_UP_OFFER_REQUEST', 'LOAN_TAKEOVER_OFFER_REQUEST', 'LOAN_RESTRUCTURE_REQUEST']).catch(next));
+router.get('/loan-request', (req, res, next) => getMessages(req, res, LOAN_REQUEST_TYPES).catch(next));
 router.get('/loan-offer', (req, res, next) => getMessages(req, res, ['LOAN_INITIAL_APPROVAL_NOTIFICATION']).catch(next));
 router.get('/hr-approval', (req, res, next) => getMessages(req, res, ['LOAN_FINAL_APPROVAL_NOTIFICATION']).catch(next));
 router.get('/disbursement', (req, res, next) => getMessages(req, res, ['LOAN_DISBURSEMENT_NOTIFICATION', 'TAKEOVER_DISBURSEMENT_NOTIFICATION', 'LOAN_DISBURSEMENT_FAILURE_NOTIFICATION']).catch(next));
 router.get('/liquidation', (req, res, next) => getMessages(req, res, ['LOAN_LIQUIDATION_NOTIFICATION']).catch(next));
+
+// For the Grafana alert: charges are arriving but no loan request has been logged.
+// The window is computed here because alert queries have no dashboard time range.
+router.get('/pipeline-health', async (req, res, next) => {
+  try {
+    const hours = Math.min(Math.max(Number(req.query.hours) || 24, 1), 24 * 31);
+    const filter = { tenantId: req.tenant.tenantId, createdAt: { $gte: new Date(Date.now() - hours * 3600000) } };
+    const [charges, loanRequests] = await Promise.all([
+      PossibleLoanCharges.countDocuments(filter),
+      // backfilled history must not hide a logger that has stopped
+      MessageLog.countDocuments({ ...filter, messageType: { $in: LOAN_REQUEST_TYPES }, source: { $ne: 'backfill' } })
+    ]);
+    const row = {
+      tenant_id: req.tenant.tenantId, window_hours: hours, charges, loan_requests: loanRequests,
+      firing: charges > 0 && loanRequests === 0 ? 1 : 0
+    };
+    return res.json({ success: true, rows: [row] });
+  } catch (error) { return next(error); }
+});
 
 router.use((error, req, res, next) => {
   res.status(500).json({ success: false, message: error.message });

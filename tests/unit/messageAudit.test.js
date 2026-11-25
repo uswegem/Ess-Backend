@@ -287,3 +287,26 @@ describe('summary_rows', () => {
     ]);
   });
 });
+
+describe('pipeline health (alert query)', () => {
+  const health = () => new Promise((resolve, reject) => {
+    const layer = reportingRouter.stack.find((l) => l.route?.path === '/pipeline-health');
+    layer.route.stack[0].handle({ tenant: { tenantId: 'legacy-zedone' }, query: {} }, { json: (body) => resolve(body.rows[0]) }, reject);
+  });
+  const charge = (hoursAgo, tenantId = 'legacy-zedone') => PossibleLoanCharges.collection.insertOne({ tenantId, createdAt: new Date(Date.now() - hoursAgo * 3600000) });
+  const request = (extra = {}) => MessageLog.create({ tenantId: 'legacy-zedone', messageId: `r${Math.random()}`, messageType: 'LOAN_OFFER_REQUEST', xmlPayload: '<x/>', ...extra });
+
+  test('is quiet without recent charges for this tenant', async () => {
+    await charge(30);
+    await charge(1, 'other');
+    expect(await health()).toMatchObject({ charges: 0, loan_requests: 0, firing: 0 });
+  });
+
+  test('fires on charges without a logged loan request, ignoring backfilled ones', async () => {
+    await charge(1);
+    await request({ source: 'backfill' });
+    expect(await health()).toMatchObject({ tenant_id: 'legacy-zedone', charges: 1, loan_requests: 0, firing: 1 });
+    await request();
+    expect(await health()).toMatchObject({ loan_requests: 1, firing: 0 });
+  });
+});

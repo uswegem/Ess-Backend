@@ -1,0 +1,57 @@
+# Fires when a tenant has Possible Loan Charges but no logged Loan Request in 24h.
+# Shipped paused, with no notification channel. The Infinity API key is scoped to
+# one tenant; another tenant needs its own datasource and a copy of this rule.
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: ess-loan-pipeline
+    folder: ESS Alerts
+    interval: 15m
+    rules:
+      - uid: ess-charges-without-requests
+        title: Loan charges received but no loan request (24h)
+        condition: B
+        isPaused: true
+        for: 0s
+        noDataState: NoData
+        execErrState: Error
+        labels:
+          service: ess-loans
+          severity: warning
+        annotations:
+          summary: 'Tenant {{ $labels.tenant_id }} had loan charges but no loan request in the last 24 hours'
+          description: 'Check that loan requests still reach POST /api/loan and that message logging is enabled.'
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 86400
+              to: 0
+            datasourceUid: infinity-reporting
+            model:
+              refId: A
+              type: json
+              source: url
+              parser: backend
+              format: table
+              url: /api/v1/internal/reporting/pipeline-health?hours=24
+              url_options:
+                method: GET
+              root_selector: rows
+              # one text column (becomes the label) and one number (the value)
+              columns:
+                - { selector: tenant_id, text: tenant_id, type: string }
+                - { selector: firing, text: firing, type: number }
+          - refId: B
+            datasourceUid: __expr__
+            relativeTimeRange:
+              from: 0
+              to: 0
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [0]
