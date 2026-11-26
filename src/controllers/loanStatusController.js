@@ -5,6 +5,7 @@ const logger = require('../utils/logger');
 const { getUtumishiEndpoint, getApiTimeoutMs } = require('../config/runtimeEnv');
 const { getUtumishiHttpsAgent } = require('../utils/utumishiAgent');
 const messageAudit = require('../services/messageAudit');
+const { recordStatusResponse } = require('../services/essStatusService');
 
 // Main controller function
 exports.triggerLoanStatusRequest = async (req, res) => {
@@ -53,6 +54,9 @@ exports.triggerLoanStatusRequest = async (req, res) => {
     );
 
     logger.info('ESS Response received:', essResponse.status);
+
+    // saved before replying so the page's next suggestion lookup sees it
+    await recordStatusResponse(ApplicationNumber, essResponse.data, req.tenant?.tenantId);
 
     // Return ESS response
     res.status(200).json({ success: true, sent: signedXml, essResponse: essResponse.data });

@@ -7,6 +7,7 @@ const { getUtumishiHttpsAgent } = require('../utils/utumishiAgent');
 const xml2js = require('xml2js');
 const MessageLog = require('../models/MessageLog');
 const LoanMappingService = require('../services/loanMappingService');
+const { recordDisbursementNotified } = require('../services/essStatusService');
 
 async function sendToESS(signedXml) {
   const essUrl = getUtumishiEndpoint({ required: true });
@@ -120,6 +121,10 @@ exports.triggerOutgoingMessage = async (req, res) => {
       tenantId: req.tenant?.tenantId,
       sentBy: req.user?._id
     });
+
+    if (MessageType === 'LOAN_DISBURSEMENT_NOTIFICATION') {
+      await recordDisbursementNotified(applicationNumber, essResponse.data, req.tenant?.tenantId);
+    }
 
     // Bring this endpoint in line with what the automated flow
     // (loanOfferHandler.js) does on a successful LOAN_INITIAL_APPROVAL_NOTIFICATION

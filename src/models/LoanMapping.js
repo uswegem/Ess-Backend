@@ -116,6 +116,18 @@ const loanMappingSchema = new mongoose.Schema({
     default: 'INITIAL_OFFER'
   },
 
+  // Utumishi's own status from the latest LOAN_STATUS_REQUEST (see essStatusService).
+  // Not an enum: the values are theirs.
+  essStatus: {
+    type: String
+  },
+  essStatusCheckedAt: {
+    type: Date
+  },
+  essDisbursementNotifiedAt: {
+    type: Date
+  },
+
   // Actor tracking for rejections and cancellations
   rejectedBy: {
     type: String,

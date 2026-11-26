@@ -6,6 +6,7 @@ const DBTransaction = require('../utils/dbTransaction');
 const healthMonitor = require('../utils/loanMappingHealthMonitor');
 const { buildTenantQuery } = require('../utils/tenantQuery');
 const { getActiveTenantContext } = require('../utils/tenantContext');
+const { disbursementSuggestion } = require('./essStatusService');
 
 class LoanMappingService {
   static resolveTenantId(tenantId = null) {
@@ -782,7 +783,9 @@ class LoanMappingService {
     }
 
     const statusSuggestions = this.SUGGESTED_MESSAGES_BY_STATUS[loan.status] || [];
+    const disbursement = disbursementSuggestion(loan);
     const suggested = [
+      ...(disbursement ? [disbursement] : []),
       ...statusSuggestions,
       { messageType: 'LOAN_STATUS_REQUEST', reason: 'Always available — request the current status from Fineract.' }
     ];
@@ -791,6 +794,8 @@ class LoanMappingService {
 
     return {
       loanStatus: loan.status,
+      essStatus: loan.essStatus || null,
+      essStatusCheckedAt: loan.essStatusCheckedAt || null,
       suggested,
       allMessageTypes
     };
