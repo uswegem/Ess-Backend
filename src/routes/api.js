@@ -5,7 +5,6 @@ const api = require('../services/cbs.api');
 const disbursementUtils = require('../utils/disbursementUtils');
 const digitalSignature = require('../utils/signatureUtils');
 const xml2js = require('xml2js');
-const loanStatusController = require('../controllers/loanStatusController');
 const logger = require('../utils/logger');
 const { incomingMessageAudit } = require('../services/messageAudit');
 
@@ -155,13 +154,9 @@ router.get('/client-types', async (req, res) => {
 });
 
 
-
-// Generic endpoint to manually trigger supported outgoing messages from admin portal
-const outgoingMessagesController = require('../controllers/outgoingMessagesController');
-router.post('/outgoing-message', outgoingMessagesController.triggerOutgoingMessage);
-
-// Endpoint to manually trigger LOAN_STATUS_REQUEST from admin portal
-router.post('/loan-status-request', loanStatusController.triggerLoanStatusRequest);
+// Manual message triggers live only in manualMessageActions.js (/api/v1), behind
+// authentication and permissions. Do not add them here: this router is open to
+// any resolved tenant.
 
 module.exports = router;
 

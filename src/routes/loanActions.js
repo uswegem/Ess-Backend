@@ -7,6 +7,7 @@ const disbursementUtils = require('../utils/disbursementUtils');
 const digitalSignature = require('../utils/signatureUtils');
 const { formatDateForUTUMISHI } = require('../utils/dateUtils');
 const logger = require('../utils/logger');
+const { requireSensitiveTrigger } = require('../middleware/messageTriggerPermission');
 
 const loanActionGuards = [
   authMiddleware,
@@ -71,7 +72,7 @@ router.get('/:loanId/suggested-messages', ...loanActionGuards, async (req, res) 
  *       404:
  *         description: Loan mapping not found
  */
-router.post('/send-disbursement-notification', ...loanActionGuards, async (req, res) => {
+router.post('/send-disbursement-notification', ...loanActionGuards, requireSensitiveTrigger, async (req, res) => {
     try {
         const { loanId, applicationNumber } = req.body;
         const tenantId = req.tenant?.tenantId || null;
@@ -172,7 +173,7 @@ router.post('/send-disbursement-notification', ...loanActionGuards, async (req, 
  *       404:
  *         description: Loan mapping not found
  */
-router.post('/send-disbursement-failure', ...loanActionGuards, async (req, res) => {
+router.post('/send-disbursement-failure', ...loanActionGuards, requireSensitiveTrigger, async (req, res) => {
     try {
         const { loanId, applicationNumber, reason, errorDetails } = req.body;
         const tenantId = req.tenant?.tenantId || null;
