@@ -43,6 +43,11 @@ beforeEach(() => {
 });
 
 describe('manual message trigger security', () => {
+  test.each(['/api/sign', '/api/loan/disburse'])('the signing and disbursement route %s no longer exists', async (path) => {
+    await post(path, null, {}).expect(404);
+    await post(path, sensitive, {}).expect(404);
+  });
+
   test.each(['/api/outgoing-message', '/api/loan-status-request'])('the unguarded route %s no longer exists', async (path) => {
     await post(path, null, message('LOAN_DISBURSEMENT_NOTIFICATION')).expect(404);
     await post(path, sensitive, message('LOAN_DISBURSEMENT_NOTIFICATION')).expect(404);

@@ -2,9 +2,6 @@ const express = require('express');
 const router = express.Router();
 const apiController = require('../controllers/apiController');
 const api = require('../services/cbs.api');
-const disbursementUtils = require('../utils/disbursementUtils');
-const digitalSignature = require('../utils/signatureUtils');
-const xml2js = require('xml2js');
 const logger = require('../utils/logger');
 const { incomingMessageAudit } = require('../services/messageAudit');
 
@@ -83,62 +80,6 @@ router.post('/loan', incomingMessageAudit, apiController.processRequest);
  */
 // Webhook endpoint for MIFOS notifications (bypass signature verification)
 router.post('/webhook/mifos', apiController.handleMifosWebhook);
-
-// Endpoint to manually trigger loan disbursement notification
-router.post('/loan/disburse', async (req, res) => {
-    try {
-        const result = await disbursementUtils.sendDisbursementNotification(req.body);
-        res.json({ success: true, message: 'Disbursement notification sent successfully', result });
-    } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
-    }
-});
-
-/**
- * @swagger
- * /api/sign:
- *   post:
- *     summary: Generate digital signature for XML
- *     description: Helper endpoint to generate digitally signed XML for testing purposes
- *     tags:
- *       - Admin
- *     requestBody:
- *       required: true
- *       content:
- *         application/xml:
- *           schema:
- *             type: string
- *             example: |
- *               <?xml version="1.0" encoding="UTF-8"?>
- *               <Document><Data><Header><Sender>TEST</Sender></Header></Data></Document>
- *     responses:
- *       200:
- *         description: Signed XML returned
- *         content:
- *           application/xml:
- *             schema:
- *               type: string
- *       500:
- *         description: Error generating signature
- */
-// Endpoint for Postman collection to generate signatures
-router.post('/sign', async (req, res) => {
-    try {
-        // Parse the incoming XML string into an object
-        const parser = new xml2js.Parser({ explicitArray: false });
-        const parsedXml = await parser.parseStringPromise(req.body);
-        
-        // Extract the Data part (createSignedXML expects just the Data object)
-        const dataToSign = parsedXml.Document.Data;
-        
-        // Generate signed XML
-        const signedXML = digitalSignature.createSignedXML(dataToSign);
-        res.status(200).send(signedXML);
-    } catch (error) {
-        logger.error('Error in /api/sign:', { error: error.message, stack: error.stack });
-        res.status(500).json({ success: false, error: error.message });
-    }
-});
 
 // Single endpoint for all frontend requests
 router.post('/loan', apiController.processRequest);
