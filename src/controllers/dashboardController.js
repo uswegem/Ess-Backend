@@ -545,9 +545,13 @@ class DashboardController {
           return res.json({ success: true, data: { rows: [] } });
         }
         const allRows = await computeDelinquencyRows(bucketKey, tenantFilter);
+        const total = allRows.length;
+        // all=true is for exports: the whole bucket, already computed above, in one response
+        if (req.query.all === 'true') {
+          return res.json({ success: true, data: { rows: allRows, pagination: { page: 1, limit: total, total, pages: 1 } } });
+        }
         const page = Math.max(1, parseInt(req.query.page, 10) || 1);
         const limit = Math.min(Math.max(1, parseInt(req.query.limit, 10) || 25), 200);
-        const total = allRows.length;
         const start = (page - 1) * limit;
         const rows = allRows.slice(start, start + limit);
         return res.json({ success: true, data: { rows, pagination: { page, limit, total, pages: Math.ceil(total / limit) } } });
